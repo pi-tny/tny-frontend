@@ -5,7 +5,6 @@ export function Footer() {
     <footer className="mt-10 border-t border-neutral-800 bg-[#111] px-6 py-8 text-neutral-400 sm:px-8 lg:px-10">
       <div className="mx-auto flex max-w-7xl flex-col gap-8 lg:flex-row lg:justify-between">
         <div className="max-w-sm">
-          {/* Logo substituindo o H2 */}
           <img 
             src={logoTny} 
             alt="Logo TNY" 

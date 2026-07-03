@@ -9,7 +9,7 @@ export function ProductDetail({ onBack }: { onBack: () => void }) {
       <p className="text-xl font-semibold mb-4 text-emerald-400">R$ 89,90</p>
       
       <p className="text-neutral-400 text-sm mb-6">
-        Descrição detalhada do produto. Este é o espaço onde entra a informação que virá do backend.
+        Descrição detalhada do produto.
       </p>
       
       <button className="w-full bg-white text-black font-bold py-4 rounded-xl">

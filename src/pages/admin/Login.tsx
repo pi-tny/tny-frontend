@@ -7,7 +7,7 @@ export function LoginAdmin() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // Troque "1234" pela senha que você quiser
+    // Troque "1234" pela senha do administrador
     if (senha === "1234") {
       localStorage.setItem("admin_auth", "true");
       navigate("/admin/dashboard");

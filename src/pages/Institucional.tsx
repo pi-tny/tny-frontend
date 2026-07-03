@@ -12,7 +12,7 @@ export function Institucional() {
         <p className="text-sm uppercase tracking-[0.3em] text-amber-300">Institucional</p>
         <h1 className="mt-2 text-3xl font-semibold">Sobre a TNY</h1>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-neutral-300">
-          Este espaço está preparado para receber as informações institucionais corretas da marca, como missão, visão, valores, políticas e dados de contato.
+          Loja de roupas masculinas referência no mercado regional a mais de 15 anos.
         </p>
 
         <div className="mt-8 grid gap-4 md:grid-cols-3">

@@ -20,10 +20,21 @@ export function Produto() {
   const navigate = useNavigate();
   const { addToCart } = useCarrinho();
   const { showToast } = useToast();
+  
   const [selectedColor, setSelectedColor] = useState("Branco");
+  const [selectedSize, setSelectedSize] = useState(""); // Novo estado para tamanho
 
   const product = PRODUTOS.find((item) => item.id === Number(id));
+  const [imagemAtiva, setImagemAtiva] = useState(product?.image || "");
+
   const availableColors = product?.colors && product.colors.length > 0 ? product.colors : ["Branco", "Cinza", "Preto", "Azul", "Amarelo", "Vermelho", "Verde", "Marrom"];
+
+  useEffect(() => {
+    if (product) {
+      setImagemAtiva(product.image);
+      if (product.sizes && product.sizes.length > 0) setSelectedSize(product.sizes[0]);
+    }
+  }, [product]);
 
   useEffect(() => {
     if (availableColors[0]) {
@@ -33,15 +44,14 @@ export function Produto() {
 
   const handleAddToCart = () => {
     if (!product) return;
-
-    addToCart(product, selectedColor);
+    // Adicionamos o selectedSize aqui
+    addToCart(product, selectedColor, selectedSize);
     showToast("Adicionado com sucesso!");
   };
 
   const handleFinalizeOrder = () => {
     if (!product) return;
-
-    addToCart(product, selectedColor);
+    addToCart(product, selectedColor, selectedSize);
     showToast("Adicionado com sucesso!");
     navigate("/checkout");
   };
@@ -49,12 +59,9 @@ export function Produto() {
   if (!product) {
     return (
       <div className="min-h-screen bg-[#060606] p-6 text-white">
-        <Link to="/" className="mb-6 inline-block text-sm text-neutral-400">
-          ← Voltar para a loja
-        </Link>
+        <Link to="/" className="mb-6 inline-block text-sm text-neutral-400">← Voltar para a loja</Link>
         <div className="rounded-[24px] border border-white/10 bg-[#141414] p-8 text-center">
           <h1 className="text-2xl font-semibold">Produto não encontrado</h1>
-          <p className="mt-2 text-sm text-neutral-400">Não foi possível localizar esse item no catálogo.</p>
         </div>
       </div>
     );
@@ -62,22 +69,37 @@ export function Produto() {
 
   return (
     <div className="min-h-screen bg-[#060606] p-4 text-white sm:p-6 lg:p-8">
-      <Link to="/" className="mb-6 inline-block text-sm text-neutral-400">
-        ← Voltar para a loja
-      </Link>
+      <Link to="/" className="mb-6 inline-block text-sm text-neutral-400">← Voltar para a loja</Link>
 
       <div className="mx-auto grid max-w-6xl gap-8 rounded-[32px] border border-white/10 bg-[#111111] p-4 shadow-2xl sm:p-6 lg:grid-cols-[1.1fr_0.9fr] lg:p-8">
-        <div className="overflow-hidden rounded-[24px] border border-white/10 bg-[#191919]">
-          <img src={product.image} alt={product.name} className="h-[420px] w-full object-cover" />
+        
+        {/* COLUNA DE IMAGENS */}
+        <div className="flex flex-col gap-4">
+          <div className="overflow-hidden rounded-[24px] border border-white/10 bg-[#191919]">
+            <img src={imagemAtiva} alt={product.name} className="h-[420px] w-full object-cover" />
+          </div>
+          
+          <div className="flex gap-3 overflow-x-auto">
+            {product.images?.map((img, index) => (
+              <button
+                key={index}
+                onClick={() => setImagemAtiva(img)}
+                className={`h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl border-2 transition ${imagemAtiva === img ? "border-white" : "border-transparent"}`}
+              >
+                <img src={img} alt={`${product.name} ${index}`} className="h-full w-full object-cover" />
+              </button>
+            ))}
+          </div>
         </div>
 
+        {/* COLUNA DE DETALHES */}
         <div className="flex flex-col justify-center">
           <p className="text-sm uppercase tracking-[0.35em] text-neutral-400">{product.category}</p>
           <h1 className="mt-2 text-3xl font-semibold">{product.name}</h1>
           <p className="mt-3 text-2xl font-semibold text-emerald-400">R$ {product.price.toFixed(2).replace(".", ",")}</p>
-
           <p className="mt-5 text-sm leading-7 text-neutral-300">{product.description}</p>
-
+          
+          {/* SEÇÃO DE CORES */}
           <div className="mt-6">
             <p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-neutral-400">Cores</p>
             <div className="flex flex-wrap gap-3">
@@ -95,21 +117,26 @@ export function Produto() {
             </div>
           </div>
 
+          {/* SEÇÃO DE TAMANHOS (NOVO) */}
+          <div className="mt-6">
+            <p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-neutral-400">Tamanhos</p>
+            <div className="flex flex-wrap gap-3">
+              {product.sizes?.map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => setSelectedSize(size)}
+                  className={`flex h-10 w-12 items-center justify-center rounded-full border text-sm transition ${selectedSize === size ? "border-white bg-white text-black" : "border-white/10 bg-[#1c1c1c] text-neutral-200"}`}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <button
-              type="button"
-              onClick={handleAddToCart}
-              className="flex-1 rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition hover:scale-[1.01]"
-            >
-              Adicionar ao carrinho
-            </button>
-            <button
-              type="button"
-              onClick={handleFinalizeOrder}
-              className="flex-1 rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/20"
-            >
-              Finalizar pedido
-            </button>
+            <button type="button" onClick={handleAddToCart} className="flex-1 rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition hover:scale-[1.01]">Adicionar ao carrinho</button>
+            <button type="button" onClick={handleFinalizeOrder} className="flex-1 rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/20">Finalizar pedido</button>
           </div>
         </div>
       </div>

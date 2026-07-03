@@ -21,14 +21,14 @@ export function Promocoes() {
           <div className="p-5 sm:p-6">
             <p className="text-sm uppercase tracking-[0.3em] text-amber-300">Campanha especial</p>
             <h2 className="mt-2 text-2xl font-semibold">Estilo com desconto por tempo limitado</h2>
-            <p className="mt-2 text-sm text-neutral-300">Garanta looks modernos com valores irresistíveis.</p>
+            <p className="mt-2 text-sm text-neutral-300">Garanta conjuntos modernos com valores acessiveis.</p>
           </div>
         </section>
 
         <section>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">Produtos em oferta</h2>
-            <span className="text-sm text-neutral-400">Até sexta</span>
+            <span className="text-sm text-neutral-400">Oferta Limitada</span>
           </div>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             {promoProducts.map((product) => (

@@ -9,7 +9,7 @@ import { Revendedor } from "../pages/Revendedor";
 import { Dashboard } from "../pages/admin/Dashboard";
 import { CadastroProduto } from "../pages/admin/CadastroProduto";
 import { GerenciarEstoque } from "../pages/admin/GerenciarEstoque";
-import { LoginAdmin } from "../pages/admin/Login"; // 1. Adicione este import
+import { LoginAdmin } from "../pages/admin/Login"; 
 
 export function AppRoutes() {
   return (
@@ -23,7 +23,7 @@ export function AppRoutes() {
       <Route path="/revendedor" element={<Revendedor />} />
       
       {/* Admin Routes */}
-      <Route path="/admin/login" element={<LoginAdmin />} /> {/* 2. Adicione esta rota */}
+      <Route path="/admin/login" element={<LoginAdmin />} /> {/* */}
       <Route path="/admin/dashboard" element={<Dashboard />} />
       <Route path="/admin/cadastro-produto" element={<CadastroProduto />} />
       <Route path="/admin/gerenciar-estoque" element={<GerenciarEstoque />} />

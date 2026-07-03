@@ -3,6 +3,7 @@ export interface Produto {
   name: string;
   price: number;
   image: string;
+  images: string[];
   badge?: string;
   description?: string;
   colors?: string[];

@@ -1,5 +1,4 @@
 import { NavLink, Link } from "react-router-dom";
-// Importando sua imagem da pasta assets
 import logoTNY from "../assets/Ativo 17.png"; 
 
 const navItems = [
@@ -14,7 +13,7 @@ export function Header() {
     <header className="border-b border-neutral-800 bg-[#111] px-4 py-4 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-4">
         <div className="flex items-center justify-between">
-          {/* Substituí o texto pelo componente img com o logo importado */}
+          {/* Logo*/}
           <Link to="/" className="flex items-center">
             <img 
               src={logoTNY} 
@@ -28,7 +27,7 @@ export function Header() {
           </Link>
         </div>
 
-        {/* ... restante do código permanece igual ... */}
+        {/* Barra de busca */}
         <div className="flex items-center rounded-full border border-white/10 bg-[#1A1A1A] px-4 py-3 text-sm text-neutral-400">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
             <circle cx="11" cy="11" r="8" />
