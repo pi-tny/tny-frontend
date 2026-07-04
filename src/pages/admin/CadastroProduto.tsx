@@ -85,31 +85,28 @@ export function CadastroProduto() {
     setIsSubmitting(true);
 
     try {
-      // Simular delay de envio
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // Obter produtos existentes do localStorage
       const storedProdutos = localStorage.getItem(PRODUTOS_STORAGE_KEY);
       const produtos: Produto[] = storedProdutos ? JSON.parse(storedProdutos) : [];
 
-      // Criar novo produto com ID único
+      // CORREÇÃO: Adicionando campos obrigatórios 'images', 'sizes' e 'colors'
       const newProduct: Produto = {
         id: Date.now(),
         name: formData.name,
         price: parseFloat(formData.price),
         image: formData.image,
+        images: [formData.image], 
         description: formData.description,
         category: formData.category,
+        sizes: ["P", "M", "G", "GG"], 
+        colors: ["Branco", "Preto"],
         badge: formData.promocao ? "Promoção" : undefined,
       };
 
-      // Adicionar novo produto à lista
       const updatedProdutos = [...produtos, newProduct];
-
-      // Salvar no localStorage
       localStorage.setItem(PRODUTOS_STORAGE_KEY, JSON.stringify(updatedProdutos));
 
-      // Limpar formulário
       setFormData({
         id: 0,
         code: "",
@@ -122,7 +119,6 @@ export function CadastroProduto() {
       });
       setPreviewImage("");
 
-      // Redirecionar para gerenciar estoque
       alert("Produto cadastrado com sucesso!");
       navigate("/admin/gerenciar-estoque");
     } catch (error) {
@@ -145,10 +141,7 @@ export function CadastroProduto() {
 
         <h1 className="text-3xl font-bold mb-8">Cadastrar Novo Produto</h1>
 
-        <form
-          onSubmit={handleSubmit}
-          className="bg-[#141414] border border-white/10 rounded-xl p-8 space-y-6"
-        >
+        <form onSubmit={handleSubmit} className="bg-[#141414] border border-white/10 rounded-xl p-8 space-y-6">
           {/* Código */}
           <div>
             <label className="block text-sm font-semibold mb-2">Código do Produto</label>
