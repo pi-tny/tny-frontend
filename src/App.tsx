@@ -1,5 +1,6 @@
 import { useContext } from "react";
 import { BrowserRouter } from "react-router-dom";
+import { HelmetProvider } from "react-helmet-async"; // 1. Adicione esta importação
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
 import { Toast } from "./components/Toast";
@@ -33,12 +34,14 @@ function AppContent() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <ToastProvider>
-        <CarrinhoProvider>
-          <AppContent />
-        </CarrinhoProvider>
-      </ToastProvider>
-    </BrowserRouter>
+    <HelmetProvider> {/* 2. Envolva tudo aqui */}
+      <BrowserRouter>
+        <ToastProvider>
+          <CarrinhoProvider>
+            <AppContent />
+          </CarrinhoProvider>
+        </ToastProvider>
+      </BrowserRouter>
+    </HelmetProvider>
   );
 }

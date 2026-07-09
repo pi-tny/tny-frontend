@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { PRODUTOS } from "../data/produtos";
 import { useCarrinho } from "../context/useCarrinho";
 import { useToast } from "../context/useToast";
@@ -22,7 +23,7 @@ export function Produto() {
   const { showToast } = useToast();
   
   const [selectedColor, setSelectedColor] = useState("Branco");
-  const [selectedSize, setSelectedSize] = useState(""); // Novo estado para tamanho
+  const [selectedSize, setSelectedSize] = useState("");
 
   const product = PRODUTOS.find((item) => item.id === Number(id));
   const [imagemAtiva, setImagemAtiva] = useState(product?.image || "");
@@ -44,7 +45,6 @@ export function Produto() {
 
   const handleAddToCart = () => {
     if (!product) return;
-    // Adicionamos o selectedSize aqui
     addToCart(product, selectedColor, selectedSize);
     showToast("Adicionado com sucesso!");
   };
@@ -69,16 +69,22 @@ export function Produto() {
 
   return (
     <div className="min-h-screen bg-[#060606] p-4 text-white sm:p-6 lg:p-8">
+      <Helmet>
+        <title>{product.name} | TNY Menswear</title>
+        <meta property="og:title" content={product.name} />
+        <meta property="og:description" content={product.description?.substring(0, 160) || "Descrição do produto TNY Menswear"} />
+        <meta property="og:image" content={product.image} />              
+        <meta property="og:type" content="product" />
+        <meta property="og:url" content={window.location.href} />
+      </Helmet>
+
       <Link to="/" className="mb-6 inline-block text-sm text-neutral-400">← Voltar para a loja</Link>
 
       <div className="mx-auto grid max-w-6xl gap-8 rounded-[32px] border border-white/10 bg-[#111111] p-4 shadow-2xl sm:p-6 lg:grid-cols-[1.1fr_0.9fr] lg:p-8">
-        
-        {/* COLUNA DE IMAGENS */}
         <div className="flex flex-col gap-4">
           <div className="overflow-hidden rounded-[24px] border border-white/10 bg-[#191919]">
             <img src={imagemAtiva} alt={product.name} className="h-[420px] w-full object-cover" />
           </div>
-          
           <div className="flex gap-3 overflow-x-auto">
             {product.images?.map((img, index) => (
               <button
@@ -92,14 +98,12 @@ export function Produto() {
           </div>
         </div>
 
-        {/* COLUNA DE DETALHES */}
         <div className="flex flex-col justify-center">
           <p className="text-sm uppercase tracking-[0.35em] text-neutral-400">{product.category}</p>
           <h1 className="mt-2 text-3xl font-semibold">{product.name}</h1>
           <p className="mt-3 text-2xl font-semibold text-emerald-400">R$ {product.price.toFixed(2).replace(".", ",")}</p>
           <p className="mt-5 text-sm leading-7 text-neutral-300">{product.description}</p>
           
-          {/* SEÇÃO DE CORES */}
           <div className="mt-6">
             <p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-neutral-400">Cores</p>
             <div className="flex flex-wrap gap-3">
@@ -117,7 +121,6 @@ export function Produto() {
             </div>
           </div>
 
-          {/* SEÇÃO DE TAMANHOS (NOVO) */}
           <div className="mt-6">
             <p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-neutral-400">Tamanhos</p>
             <div className="flex flex-wrap gap-3">

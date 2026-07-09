@@ -14,13 +14,11 @@ export type CarrinhoContextValue = {
 export const CarrinhoContext = createContext<CarrinhoContextValue | undefined>(undefined);
 
 export function CarrinhoProvider({ children }: { children: ReactNode }) {
-  // Inicializa o estado lendo do localStorage para não perder dados ao atualizar a página
   const [cart, setCart] = useState<CartItem[]>(() => {
     const saved = localStorage.getItem("tny_carrinho");
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Salva no localStorage sempre que o carrinho mudar
   useEffect(() => {
     localStorage.setItem("tny_carrinho", JSON.stringify(cart));
   }, [cart]);
@@ -40,7 +38,6 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
       const existing = prev.find(
         (item) => item.id === newItem.id && item.color === newItem.color && item.size === newItem.size,
       );
-
       if (existing) {
         return prev.map((item) =>
           item.id === newItem.id && item.color === newItem.color && item.size === newItem.size
@@ -48,7 +45,6 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
             : item,
         );
       }
-
       return [...prev, newItem];
     });
   };
@@ -75,8 +71,12 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
   const gerarMensagemWhatsApp = useCallback(
     (cartItems: CartItem[] = cart) => {
       const itensTexto = cartItems
-        .map((item) => `${item.quantity}x ${item.name} (${item.color} / ${item.size})`)
-        .join("\n");
+        .map((item) => {
+          const linkProduto = `${window.location.origin}/produto/${item.id}`;
+          // Removido o \n antes do link para evitar problemas de formatação no WhatsApp
+          return `${item.quantity}x ${item.name} (${item.color} / ${item.size}) - Confira: ${linkProduto}`;
+        })
+        .join("\n\n");
 
       const subtotalTexto = subtotal.toFixed(2).replace(".", ",");
 
