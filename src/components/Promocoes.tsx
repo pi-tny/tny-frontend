@@ -68,7 +68,7 @@ export function Promocoes() {
         <div className="rounded-[24px] border border-white/10 bg-[#141414] p-6 text-sm text-neutral-400">
           <p className="font-semibold uppercase tracking-[0.3em] text-white">Contato TNY</p>
           <p className="mt-2">WhatsApp: (85) 98102-5616</p>
-          <p>E-mail: contato@tny.com.br</p>
+          <p>E-mail: tnymenswear@gmail.com.</p>
           <p>Instagram: @tnymenswear</p>
           <Link to="/carrinho" className="mt-4 inline-block rounded-full bg-white px-4 py-2 text-sm font-semibold text-black">
             Ir para o carrinho

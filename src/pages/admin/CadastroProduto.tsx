@@ -90,7 +90,6 @@ export function CadastroProduto() {
       const storedProdutos = localStorage.getItem(PRODUTOS_STORAGE_KEY);
       const produtos: Produto[] = storedProdutos ? JSON.parse(storedProdutos) : [];
 
-      // CORREÇÃO: Adicionando campos obrigatórios 'images', 'sizes' e 'colors'
       const newProduct: Produto = {
         id: Date.now(),
         name: formData.name,

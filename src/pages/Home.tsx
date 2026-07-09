@@ -110,7 +110,7 @@ export function Home() {
 
       <footer className="mt-8 border-t border-white/10 bg-[#000]">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 text-center text-sm text-neutral-500 sm:px-6 lg:px-8">
-          <p className="font-semibold uppercase tracking-[0.3em] text-white">TNY Modas</p>
+          <p className="font-semibold uppercase tracking-[0.3em] text-white">TNY CONCEITO</p>
           <p>CNPJ: 00.000.000/0001-00</p>
           <p>Rua Dedé Gama, 178 - Croata II, Pacajus - Ceará</p>
           <p className="pt-2">©TNY. Todos os direitos reservados.</p>

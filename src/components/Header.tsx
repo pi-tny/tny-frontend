@@ -1,4 +1,6 @@
 import { NavLink, Link } from "react-router-dom";
+import { useContext } from "react";
+import { CarrinhoContext } from "../context/CarrinhoContext"; 
 import logoTNY from "../assets/Ativo 17.png"; 
 
 const navItems = [
@@ -9,6 +11,9 @@ const navItems = [
 ];
 
 export function Header() {
+  const carrinhoContext = useContext(CarrinhoContext);
+  const totalItems = carrinhoContext?.totalItems || 0;
+
   return (
     <header className="border-b border-neutral-800 bg-[#111] px-4 py-4 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-4">
@@ -22,11 +27,14 @@ export function Header() {
             />
           </Link>
           
-          <Link to="/carrinho" className="rounded-full border border-white/10 bg-white/5 p-2.5 text-lg">
+          <Link to="/carrinho" className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2.5 text-lg">
+            {totalItems > 0 && (
+              <span className="text-xs font-bold text-amber-300">{totalItems}</span>
+            )}
             🛍️
           </Link>
         </div>
-
+        
         {/* Barra de busca */}
         <div className="flex items-center rounded-full border border-white/10 bg-[#1A1A1A] px-4 py-3 text-sm text-neutral-400">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
