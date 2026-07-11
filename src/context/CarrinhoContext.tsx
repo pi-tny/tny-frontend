@@ -76,8 +76,11 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
   const gerarMensagemWhatsApp = useCallback(
     (cartItems: CartItem[] = cart) => {
       const itensTexto = cartItems
-        .map((item) => `${item.quantity}x ${item.name} (${item.color} / ${item.size})`)
-        .join("\n");
+        .map((item) => {
+          const linkProduto = `${window.location.origin}/produto/${item.id}`;
+          return `${item.quantity}x ${item.name} (${item.color} / ${item.size}) - Confira: ${linkProduto}`;
+        })
+        .join("\n\n");
       const subtotalTexto = subtotal.toFixed(2).replace(".", ",");
       return [
         "Olá! Quero finalizar a compra da TNY.",

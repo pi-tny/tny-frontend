@@ -1,5 +1,6 @@
 import { useReducer, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { Copy, Share2 } from "lucide-react";
 import { getProductById, getRelatedProducts } from "../services/api";
 import type { ApiImage, ApiVariant, ProductDetail, ProductSummary } from "../types";
@@ -251,6 +252,23 @@ export function Produto() {
 
   return (
     <div>
+      {/* SEO / Open Graph */}
+      <Helmet>
+        <title>{product.name} | TNY Menswear</title>
+        <meta
+          name="description"
+          content={product.description?.substring(0, 160) || `${product.name} — TNY Menswear`}
+        />
+        <meta property="og:title" content={`${product.name} | TNY Menswear`} />
+        <meta
+          property="og:description"
+          content={product.description?.substring(0, 160) || `${product.name} — TNY Menswear`}
+        />
+        {coverUrl && <meta property="og:image" content={coverUrl} />}
+        <meta property="og:type" content="product" />
+        <meta property="og:url" content={window.location.href} />
+      </Helmet>
+
       {/* Breadcrumb */}
       <nav aria-label="Trilha de navegação" className="mb-5 flex items-center gap-1.5 text-sm text-ink-muted">
         <Link to="/" className="transition-colors hover:text-ink">Início</Link>

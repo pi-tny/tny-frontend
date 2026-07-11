@@ -4,7 +4,6 @@ import { subscribeLead } from "../services/api";
 import { useToast } from "../context/useToast";
 import { Button, Input } from "./ui";
 import logoTny from "../assets/Ativo 17.png";
-import { useForm } from '@formspree/react';
 
 export function Footer() {
   const { showToast } = useToast();
@@ -52,7 +51,7 @@ export function Footer() {
           </div>
           <div>
             <p className="mb-3 font-semibold text-ink">E-mail</p>
-            <p className="text-ink-muted">contato@tnymenswear.com.br</p>
+            <p className="text-ink-muted">tnymenswear@gmail.com</p>
           </div>
           <div>
             <p className="mb-3 font-semibold text-ink">Redes sociais</p>

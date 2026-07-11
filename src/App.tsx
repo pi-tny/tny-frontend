@@ -1,5 +1,6 @@
 import { useContext } from "react";
 import { BrowserRouter, useLocation } from "react-router-dom";
+import { HelmetProvider } from "react-helmet-async";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
@@ -41,14 +42,16 @@ function AppContent() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <CarrinhoProvider>
-            <AppContent />
-          </CarrinhoProvider>
-        </ToastProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <HelmetProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <ToastProvider>
+            <CarrinhoProvider>
+              <AppContent />
+            </CarrinhoProvider>
+          </ToastProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </HelmetProvider>
   );
 }
