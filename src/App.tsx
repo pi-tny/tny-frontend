@@ -1,29 +1,36 @@
 import { useContext } from "react";
-import { BrowserRouter } from "react-router-dom";
-import { HelmetProvider } from "react-helmet-async"; // 1. Adicione esta importação
+import { BrowserRouter, useLocation } from "react-router-dom";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
 import { Toast } from "./components/Toast";
+import { AuthProvider } from "./context/AuthContext";
 import { CarrinhoProvider } from "./context/CarrinhoContext";
 import { ToastProvider, ToastContext } from "./context/ToastContext";
 import { AppRoutes } from "./routes/AppRoutes";
 
 function AppContent() {
   const toastContext = useContext(ToastContext);
+  const { pathname } = useLocation();
+  // O painel administrativo não usa a vitrine (header/footer da loja).
+  const isAdmin = pathname.startsWith("/admin");
 
   return (
-    <div className="min-h-screen bg-[#060606] text-white">
-      <Header />
+    <div className="min-h-screen bg-bg text-ink">
+      {!isAdmin && <Header />}
 
       <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <AppRoutes />
+        <ErrorBoundary>
+          <AppRoutes />
+        </ErrorBoundary>
       </main>
 
-      <Footer />
+      {!isAdmin && <Footer />}
 
       {toastContext && (
         <Toast
           message={toastContext.message}
+          type={toastContext.type}
           isVisible={toastContext.isVisible}
           onClose={toastContext.hideToast}
         />
@@ -34,14 +41,14 @@ function AppContent() {
 
 export default function App() {
   return (
-    <HelmetProvider> {/* 2. Envolva tudo aqui */}
-      <BrowserRouter>
+    <BrowserRouter>
+      <AuthProvider>
         <ToastProvider>
           <CarrinhoProvider>
             <AppContent />
           </CarrinhoProvider>
         </ToastProvider>
-      </BrowserRouter>
-    </HelmetProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }

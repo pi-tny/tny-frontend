@@ -6,6 +6,17 @@ Aplicação de e-commerce moderna com sistema administrativo, feedback de usuár
 
 ## 🚀 Quick Start (5 minutos)
 
+### 0. Configuração de ambiente
+O storefront e o painel admin consomem a API do backend (Fastify). Configure a URL base:
+
+```bash
+cp .env.example .env   # define VITE_API_URL=http://localhost:3000 (padrão)
+```
+
+- `VITE_API_URL` — URL base da API, **sem barra final**. Se ausente, o app usa
+  `http://localhost:3000` por padrão (ver `src/services/api.ts`).
+- Suba o backend antes: `cd ../tny-backend && npm run dev`.
+
 ### 1. Inicie o servidor
 ```bash
 npm install  # Se não tiver dependências instaladas
