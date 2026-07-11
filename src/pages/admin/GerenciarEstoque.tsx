@@ -1,157 +1,292 @@
-import { useState, useEffect } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Produto } from "../../types";
+import { ArrowLeft, ChevronDown, Pencil, Plus, Search } from "lucide-react";
+import {
+  adminListProducts,
+  adminUpdateProduct,
+  adminGetProduct,
+  adminUpdateVariant,
+} from "../../services/api";
+import type { ApiVariant, PaginationMeta, ProductSummary } from "../../types";
+import { useToast } from "../../context/useToast";
+import { Badge, Button, EmptyState, Input, SafeImage, Spinner, cn } from "../../components/ui";
 
-const PRODUTOS_STORAGE_KEY = "tny_produtos";
+const PAGE_SIZE = 15;
 
-export function GerenciarEstoque() {
-  const navigate = useNavigate();
-  const [produtos, setProdutos] = useState<Produto[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+function formatBRL(value: number): string {
+  return `R$ ${value.toFixed(2).replace(".", ",")}`;
+}
+
+type LState = {
+  items: ProductSummary[];
+  meta: PaginationMeta | null;
+  loading: boolean;
+  error: string | null;
+};
+type LAction =
+  | { type: "FETCH" }
+  | { type: "SUCCESS"; items: ProductSummary[]; meta: PaginationMeta }
+  | { type: "ERROR"; error: string }
+  | { type: "UPDATE_ITEM"; item: ProductSummary };
+
+function reducer(s: LState, a: LAction): LState {
+  switch (a.type) {
+    case "FETCH":
+      return { ...s, loading: true, error: null };
+    case "SUCCESS":
+      return { items: a.items, meta: a.meta, loading: false, error: null };
+    case "ERROR":
+      return { ...s, loading: false, error: a.error };
+    case "UPDATE_ITEM":
+      return { ...s, items: s.items.map((p) => (p.id === a.item.id ? a.item : p)) };
+  }
+}
+
+// ─── Editor de estoque por variante (carrega sob demanda ao expandir) ───
+function VariantesEditor({ productId }: { productId: number }) {
+  const { showToast } = useToast();
+  const [variants, setVariants] = useState<ApiVariant[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const [savingId, setSavingId] = useState<number | null>(null);
 
   useEffect(() => {
-    // Carregar produtos do localStorage
-    const storedProdutos = localStorage.getItem(PRODUTOS_STORAGE_KEY);
-    if (storedProdutos) {
-      try {
-        const parsedProdutos = JSON.parse(storedProdutos);
-        setProdutos(parsedProdutos);
-      } catch (error) {
-        console.error("Erro ao carregar produtos:", error);
-        setProdutos([]);
-      }
-    }
-    setIsLoading(false);
-  }, []);
+    adminGetProduct(productId)
+      .then((p) => {
+        setVariants(p.variants);
+        setDrafts(Object.fromEntries(p.variants.map((v) => [v.id, String(v.quantity)])));
+      })
+      .catch((e: Error) => setError(e.message));
+  }, [productId]);
 
-  const handleDelete = (id: number) => {
-    if (confirm("Tem certeza que deseja deletar este produto?")) {
-      const updatedProdutos = produtos.filter((p) => p.id !== id);
-      setProdutos(updatedProdutos);
-      localStorage.setItem(PRODUTOS_STORAGE_KEY, JSON.stringify(updatedProdutos));
-    }
-  };
-
-  const handleClearAll = () => {
-    if (confirm("Tem certeza que deseja deletar TODOS os produtos?")) {
-      setProdutos([]);
-      localStorage.removeItem(PRODUTOS_STORAGE_KEY);
+  const saveQuantity = async (v: ApiVariant) => {
+    const draft = drafts[v.id];
+    if (draft === undefined || Number(draft) === v.quantity) return;
+    setSavingId(v.id);
+    try {
+      const updated = await adminUpdateVariant(v.id, { quantity: Number(draft) });
+      setVariants((prev) => prev?.map((x) => (x.id === v.id ? updated : x)) ?? null);
+      showToast("Estoque atualizado.");
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Erro ao salvar estoque", "error");
+    } finally {
+      setSavingId(null);
     }
   };
 
-  if (isLoading) {
+  if (error) return <p className="p-4 text-sm text-danger">{error}</p>;
+  if (!variants) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center">
-        <p className="text-lg">Carregando...</p>
+      <div className="flex items-center gap-2 p-4 text-sm text-ink-muted">
+        <Spinner /> Carregando variantes…
       </div>
     );
   }
+  if (variants.length === 0) return <p className="p-4 text-sm text-ink-subtle">Este produto não tem variantes.</p>;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Gerenciar Estoque</h1>
-          <div className="flex gap-4">
-            <button
-              onClick={() => navigate("/admin/dashboard")}
-              className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 rounded-lg transition"
-            >
-              ← Voltar
-            </button>
-            <button
-              onClick={() => navigate("/admin/cadastro-produto")}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg transition font-semibold"
-            >
-              + Novo Produto
-            </button>
-          </div>
+    <div className="space-y-2 p-4">
+      {variants.map((v) => (
+        <div key={v.id} className="flex flex-wrap items-center gap-3 rounded-[14px] border border-line bg-elevated p-3">
+          <span className="min-w-0 flex-1 text-sm">
+            <span className="font-medium">{v.color}</span> · {v.size}
+            <span className="ml-2 text-xs text-ink-subtle">{v.variant_sku}</span>
+          </span>
+          <label className="flex items-center gap-2 text-xs text-ink-muted">
+            Estoque
+            <Input
+              type="number"
+              min="0"
+              value={drafts[v.id] ?? ""}
+              onChange={(e) => setDrafts((d) => ({ ...d, [v.id]: e.target.value }))}
+              className="w-24 py-2"
+              aria-label={`Estoque ${v.color} ${v.size}`}
+            />
+          </label>
+          <Button
+            size="sm"
+            variant="ghost"
+            loading={savingId === v.id}
+            disabled={Number(drafts[v.id]) === v.quantity}
+            onClick={() => saveQuantity(v)}
+          >
+            Salvar
+          </Button>
         </div>
+      ))}
+    </div>
+  );
+}
 
-        {produtos.length === 0 ? (
-          <div className="bg-[#141414] border border-white/10 rounded-xl p-8 text-center">
-            <p className="text-neutral-400 mb-4">Nenhum produto cadastrado ainda.</p>
-            <button
-              onClick={() => navigate("/admin/cadastro-produto")}
-              className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg transition font-semibold inline-block"
-            >
-              Cadastrar Primeiro Produto
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="bg-[#141414] border border-white/10 rounded-xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-white/10 bg-[#1a1a1a]">
-                      <th className="px-6 py-4 text-left text-sm font-semibold">ID</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold">Imagem</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold">Nome</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold">Categoria</th>
-                      <th className="px-6 py-4 text-right text-sm font-semibold">Preço</th>
-                      <th className="px-6 py-4 text-center text-sm font-semibold">Status</th>
-                      <th className="px-6 py-4 text-center text-sm font-semibold">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {produtos.map((produto) => (
-                      <tr key={produto.id} className="border-b border-white/10 hover:bg-[#1a1a1a] transition">
-                        <td className="px-6 py-4 text-sm text-neutral-400">{produto.id}</td>
-                        <td className="px-6 py-4">
-                          {produto.image && (
-                            <img
-                              src={produto.image}
-                              alt={produto.name}
-                              className="w-10 h-10 object-cover rounded"
-                            />
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-sm font-medium">{produto.name}</td>
-                        <td className="px-6 py-4 text-sm text-neutral-400">{produto.category || "-"}</td>
-                        <td className="px-6 py-4 text-sm font-semibold text-emerald-400 text-right">
-                          R$ {produto.price.toFixed(2).replace(".", ",")}
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          {produto.badge ? (
-                            <span className="px-3 py-1 bg-emerald-600/20 text-emerald-400 text-xs rounded-full">
-                              {produto.badge}
-                            </span>
-                          ) : (
-                            <span className="px-3 py-1 bg-neutral-600/20 text-neutral-400 text-xs rounded-full">
-                              Normal
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <button
-                            onClick={() => handleDelete(produto.id)}
-                            className="px-3 py-1 bg-red-600/20 text-red-400 hover:bg-red-600/40 text-xs rounded transition"
-                          >
-                            Deletar
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+export function GerenciarEstoque() {
+  const navigate = useNavigate();
+  const { showToast } = useToast();
+  const searchRef = useRef<HTMLInputElement>(null);
 
-            <div className="mt-6 flex justify-between items-center">
-              <div className="text-neutral-400">
-                Total de produtos: <span className="text-white font-semibold">{produtos.length}</span>
-              </div>
-              <button
-                onClick={handleClearAll}
-                className="px-4 py-2 bg-red-600/20 text-red-400 hover:bg-red-600/40 rounded-lg transition font-semibold"
-              >
-                Limpar Estoque
-              </button>
-            </div>
-          </>
-        )}
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
+
+  const [state, dispatch] = useReducer(reducer, { items: [], meta: null, loading: true, error: null });
+
+  useEffect(() => {
+    dispatch({ type: "FETCH" });
+    adminListProducts({ q: query || undefined, page, limit: PAGE_SIZE, sort: "newest" })
+      .then((res) => dispatch({ type: "SUCCESS", items: res.data, meta: res.meta }))
+      .catch((err: Error) => dispatch({ type: "ERROR", error: err.message }));
+  }, [query, page]);
+
+  const submitSearch = () => {
+    setQuery(searchRef.current?.value.trim() ?? "");
+    setPage(1);
+  };
+
+  const toggleActive = async (p: ProductSummary) => {
+    setTogglingId(p.id);
+    try {
+      const updated = await adminUpdateProduct(p.id, { active: !p.active });
+      dispatch({ type: "UPDATE_ITEM", item: { ...p, active: updated.active } });
+      showToast(updated.active ? "Produto ativado." : "Produto desativado.");
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Erro ao atualizar produto", "error");
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const total = state.meta?.total ?? 0;
+  const totalPages = state.meta?.total_pages ?? 1;
+
+  return (
+    <div className="mx-auto max-w-5xl">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">Gerenciar estoque</h1>
+          <p className="mt-1 text-sm text-ink-muted">{total} produto{total !== 1 ? "s" : ""} no catálogo</p>
+        </div>
+        <div className="flex gap-3">
+          <Button variant="ghost" onClick={() => navigate("/admin/dashboard")}>
+            <ArrowLeft size={16} /> Painel
+          </Button>
+          <Button onClick={() => navigate("/admin/cadastro-produto")}>
+            <Plus size={16} /> Novo produto
+          </Button>
+        </div>
       </div>
+
+      {/* Busca */}
+      <div className="mb-4 flex items-center gap-2 rounded-pill border border-line bg-surface-2 px-3 py-2 text-ink-muted focus-within:border-accent/60">
+        <Search size={16} className="flex-shrink-0" />
+        <input
+          ref={searchRef}
+          defaultValue={query}
+          onKeyDown={(e) => e.key === "Enter" && submitSearch()}
+          placeholder="Buscar por nome..."
+          aria-label="Buscar produtos"
+          className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-subtle"
+        />
+        <Button size="sm" onClick={submitSearch}>
+          Buscar
+        </Button>
+      </div>
+
+      {state.error && (
+        <div className="mb-4 rounded-[16px] border border-danger/20 bg-danger/5 p-4 text-center text-sm text-danger">
+          {state.error}
+        </div>
+      )}
+
+      {state.loading ? (
+        <div className="flex min-h-[30vh] items-center justify-center text-ink-muted">
+          <Spinner className="h-6 w-6" />
+        </div>
+      ) : state.items.length === 0 ? (
+        <EmptyState
+          title="Nenhum produto encontrado"
+          description="Cadastre um novo produto para começar."
+          action={<Button onClick={() => navigate("/admin/cadastro-produto")}>Cadastrar produto</Button>}
+        />
+      ) : (
+        <div className="space-y-2">
+          {state.items.map((p) => {
+            const promoPrice = p.promotional_price;
+            const isOnSale = promoPrice != null && promoPrice < p.price;
+            const expanded = expandedId === p.id;
+            return (
+              <div key={p.id} className="overflow-hidden rounded-card border border-line bg-surface-2">
+                <div className="flex items-center gap-3 p-3 sm:gap-4">
+                  <SafeImage
+                    src={p.cover_image ?? ""}
+                    alt={p.name}
+                    className="h-14 w-14 flex-shrink-0 rounded-[12px] border border-line object-cover"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{p.name}</p>
+                    <p className="text-xs text-ink-subtle">{p.sku}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      {!p.active && <Badge tone="danger">Inativo</Badge>}
+                      {isOnSale && <Badge tone="accent">Promoção</Badge>}
+                    </div>
+                  </div>
+                  <div className="hidden text-right tabular-nums sm:block">
+                    {isOnSale ? (
+                      <>
+                        <p className="text-sm font-semibold text-price">{formatBRL(promoPrice)}</p>
+                        <p className="text-xs text-ink-subtle line-through">{formatBRL(p.price)}</p>
+                      </>
+                    ) : (
+                      <p className="text-sm font-semibold">{formatBRL(p.price)}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setExpandedId(expanded ? null : p.id)}
+                      aria-expanded={expanded}
+                    >
+                      Estoque
+                      <ChevronDown size={14} className={cn("transition-transform", expanded && "rotate-180")} />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => navigate(`/admin/produtos/${p.id}/editar`)} aria-label="Editar produto">
+                      <Pencil size={14} />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={p.active ? "danger" : "outline"}
+                      loading={togglingId === p.id}
+                      onClick={() => toggleActive(p)}
+                    >
+                      {p.active ? "Desativar" : "Ativar"}
+                    </Button>
+                  </div>
+                </div>
+                {expanded && (
+                  <div className="border-t border-line bg-surface">
+                    <VariantesEditor productId={p.id} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Paginação */}
+          {totalPages > 1 && (
+            <div className="mt-6 flex items-center justify-center gap-3">
+              <Button variant="ghost" disabled={page <= 1} onClick={() => setPage((prev) => prev - 1)}>
+                ← Anterior
+              </Button>
+              <span className="text-sm text-ink-muted">
+                {page} / {totalPages}
+              </span>
+              <Button variant="ghost" disabled={page >= totalPages} onClick={() => setPage((prev) => prev + 1)}>
+                Próxima →
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,104 +1,98 @@
-import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import type { Produto } from "../../types";
+import { useNavigate } from "react-router-dom";
+import {
+  ClipboardList,
+  LogOut,
+  Package,
+  ShieldCheck,
+  Store,
+  Tags,
+  Users,
+  Warehouse,
+} from "lucide-react";
+import { adminListLeads, adminListOrders, adminListProducts } from "../../services/api";
+import { useAuth } from "../../context/useAuth";
+import { Button } from "../../components/ui";
 
-const PRODUTOS_STORAGE_KEY = "tny_produtos";
+type Stats = { products: number; newOrders: number; leads: number };
+
+const CARDS = [
+  { icon: ClipboardList, title: "Pedidos", desc: "Acompanhe pedidos e atualize o status.", to: "/admin/pedidos" },
+  { icon: Package, title: "Cadastrar produto", desc: "Novo produto com variantes e imagens.", to: "/admin/cadastro-produto" },
+  { icon: Warehouse, title: "Gerenciar estoque", desc: "Edite produtos e ajuste o estoque.", to: "/admin/gerenciar-estoque" },
+  { icon: Tags, title: "Categorias", desc: "Organize o catálogo por categorias.", to: "/admin/categorias" },
+  { icon: Users, title: "Leads", desc: "Contatos capturados (newsletter/revenda).", to: "/admin/leads" },
+  { icon: ShieldCheck, title: "Administradores", desc: "Gerencie o acesso ao painel.", to: "/admin/admins" },
+];
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const [stats, setStats] = useState({
-    totalProducts: 0,
-    totalPromocoes: 0,
-  });
-
-  // PROTEÇÃO: Verifica se está autenticado ao carregar a página
-  useEffect(() => {
-    const isAuthenticated = localStorage.getItem("admin_auth");
-    if (!isAuthenticated) {
-      navigate("/admin/login");
-    }
-  }, [navigate]);
+  const { admin, logout } = useAuth();
+  const [stats, setStats] = useState<Stats | null>(null);
 
   useEffect(() => {
-    // Carregar estatísticas do localStorage
-    const storedProdutos = localStorage.getItem(PRODUTOS_STORAGE_KEY);
-    if (storedProdutos) {
-      try {
-        const produtos: Produto[] = JSON.parse(storedProdutos);
-        const promocoes = produtos.filter((p) => p.badge === "Promoção").length;
-        setStats({
-          totalProducts: produtos.length,
-          totalPromocoes: promocoes,
-        });
-      } catch (error) {
-        console.error("Erro ao carregar estatísticas:", error);
-      }
-    }
+    Promise.all([
+      adminListProducts({ limit: 1 }),
+      adminListOrders({ status: "new", limit: 1 }),
+      adminListLeads({ limit: 1 }),
+    ])
+      .then(([p, o, l]) => setStats({ products: p.meta.total, newOrders: o.meta.total, leads: l.meta.total }))
+      .catch(() => {});
   }, []);
 
-  // Botão de Logout para você sair quando terminar
-  const handleLogout = () => {
-    localStorage.removeItem("admin_auth");
-    navigate("/admin/login");
+  const handleLogout = async () => {
+    await logout();
+    navigate("/admin/login", { replace: true });
   };
 
+  const statItems = [
+    { label: "Produtos", value: stats?.products },
+    { label: "Pedidos novos", value: stats?.newOrders },
+    { label: "Leads", value: stats?.leads },
+  ];
+
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-12">
-          <h1 className="text-4xl font-bold">Dashboard Administrativo</h1>
-          <div className="flex gap-4">
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-lg transition"
-            >
-              Sair
-            </button>
-            <button
-              onClick={() => navigate("/")}
-              className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 rounded-lg transition"
-            >
-              ← Voltar para Loja
-            </button>
-          </div>
+    <div className="mx-auto max-w-5xl">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">Painel administrativo</h1>
+          <p className="mt-1 text-sm text-ink-muted">
+            {admin ? `Bem-vindo, ${admin.name}.` : "Gerencie o catálogo da TNY."}
+          </p>
         </div>
-
-        {/* Estatísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-          <div className="bg-[#141414] border border-white/10 rounded-xl p-6">
-            <div className="text-neutral-400 text-sm mb-2">Total de Produtos</div>
-            <div className="text-4xl font-bold text-emerald-400">{stats.totalProducts}</div>
-          </div>
-          <div className="bg-[#141414] border border-white/10 rounded-xl p-6">
-            <div className="text-neutral-400 text-sm mb-2">Produtos em Promoção</div>
-            <div className="text-4xl font-bold text-emerald-400">{stats.totalPromocoes}</div>
-          </div>
+        <div className="flex gap-3">
+          <Button variant="ghost" onClick={() => navigate("/")}>
+            <Store size={16} /> Ver loja
+          </Button>
+          <Button variant="danger" onClick={handleLogout}>
+            <LogOut size={16} /> Sair
+          </Button>
         </div>
+      </div>
 
-        {/* Menu Principal */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Stats */}
+      <div className="mb-8 grid grid-cols-3 gap-4">
+        {statItems.map((s) => (
+          <div key={s.label} className="rounded-card border border-line bg-surface-2 p-5">
+            <p className="text-xs uppercase tracking-[0.15em] text-ink-muted">{s.label}</p>
+            <p className="mt-2 text-3xl font-bold tabular-nums text-accent">{s.value ?? "—"}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Navegação */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {CARDS.map((card) => (
           <button
-            onClick={() => navigate("/admin/cadastro-produto")}
-            className="bg-[#141414] border border-white/10 hover:border-emerald-500/50 rounded-xl p-8 text-left transition group"
+            key={card.to}
+            onClick={() => navigate(card.to)}
+            className="group rounded-card border border-line bg-surface-2 p-8 text-left transition-all duration-200 hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
           >
-            <div className="text-3xl mb-4">📦</div>
-            <h2 className="text-xl font-bold mb-2">Cadastrar Produto</h2>
-            <p className="text-neutral-400 text-sm group-hover:text-neutral-300 transition">
-              Adicione novos produtos ao catálogo com imagens, preços e promoções.
-            </p>
+            <card.icon size={28} className="text-accent" />
+            <h2 className="mt-4 text-xl font-bold">{card.title}</h2>
+            <p className="mt-2 text-sm text-ink-muted transition-colors group-hover:text-ink">{card.desc}</p>
           </button>
-
-          <button
-            onClick={() => navigate("/admin/gerenciar-estoque")}
-            className="bg-[#141414] border border-white/10 hover:border-emerald-500/50 rounded-xl p-8 text-left transition group"
-          >
-            <div className="text-3xl mb-4">📊</div>
-            <h2 className="text-xl font-bold mb-2">Gerenciar Estoque</h2>
-            <p className="text-neutral-400 text-sm group-hover:text-neutral-300 transition">
-              Visualize, edite e delete produtos do seu catálogo.
-            </p>
-          </button>
-        </div>
+        ))}
       </div>
     </div>
   );
