@@ -1,111 +1,183 @@
-import { Link } from "react-router-dom";
-import { useEffect, useState, useContext } from "react";
-import type { CartItem } from "../types";
-import { CarrinhoContext } from "../context/CarrinhoContext";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useCarrinho } from "../context/useCarrinho";
+import { useToast } from "../context/useToast";
+import { createOrder } from "../services/api";
+import { Button, Field, Input, SafeImage } from "../components/ui";
+
+const PAYMENT_OPTIONS = [
+  { value: "to_be_defined", label: "A definir" },
+  { value: "pix", label: "Pix" },
+  { value: "credit_card", label: "Cartão de crédito" },
+  { value: "cash", label: "Dinheiro" },
+  { value: "bank_transfer", label: "Transferência bancária" },
+  { value: "boleto", label: "Boleto" },
+];
+
+function formatBRL(value: number): string {
+  return `R$ ${value.toFixed(2).replace(".", ",")}`;
+}
 
 export function Checkout() {
-  const [carrinho, setCarrinho] = useState<CartItem[]>([]);
-  const context = useContext(CarrinhoContext);
+  const { cart, subtotal, updateQuantity, gerarMensagemWhatsApp, clearCart } = useCarrinho();
+  const { showToast } = useToast();
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    const storedCarrinho = localStorage.getItem("tny_carrinho");
-    if (storedCarrinho) {
-      try {
-        setCarrinho(JSON.parse(storedCarrinho));
-      } catch (e) {
-        console.error("Erro ao carregar carrinho:", e);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("to_be_defined");
+  const [loading, setLoading] = useState(false);
+
+  const allHaveVariantId = cart.every((item) => item.variantId !== undefined);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (cart.length === 0) return;
+    setLoading(true);
+    try {
+      if (allHaveVariantId) {
+        const order = await createOrder({
+          name,
+          phone,
+          email: email || undefined,
+          payment_method: paymentMethod,
+          items: cart.map((item) => ({ variant_id: item.variantId!, quantity: item.quantity })),
+        });
+        clearCart();
+        window.open(order.whatsapp_url, "_blank", "noopener,noreferrer");
+        navigate("/pedido-confirmado", { state: { orderId: order.id, total: order.total } });
+      } else {
+        const mensagem = gerarMensagemWhatsApp();
+        clearCart();
+        window.open(`https://wa.me/5585981025616?text=${encodeURIComponent(mensagem)}`, "_blank", "noopener,noreferrer");
+        navigate("/pedido-confirmado", { state: {} });
       }
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Erro ao finalizar pedido", "error");
+    } finally {
+      setLoading(false);
     }
-  }, []);
-
-  // Função para lidar com o clique nos botões de + e -
-  const handleUpdate = (id: number, color: string, size: string, delta: number) => {
-    if (!context) return;
-    
-    // Atualiza no contexto (que salva no localStorage)
-    context.updateQuantity(id, color, size, delta);
-    
-    // Atualiza o estado local para renderizar imediatamente
-    setCarrinho((prev) => 
-      prev.map((item) => 
-        item.id === id && item.color === color && item.size === size
-          ? { ...item, quantity: Math.max(0, item.quantity + delta) }
-          : item
-      ).filter((item) => item.quantity > 0)
-    );
-  };
-
-  const total = carrinho.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-
-  const handleEnviarWhatsApp = () => {
-    if (!context) return;
-    const mensagem = context.gerarMensagemWhatsApp();
-    const numeroWhatsApp = "5585981025616"; 
-    const link = `https://wa.me/${numeroWhatsApp}?text=${encodeURIComponent(mensagem)}`;
-    window.open(link, "_blank");
   };
 
   return (
-    <div className="min-h-screen bg-[#060606] px-4 py-6 text-white sm:px-6 lg:px-8">
-      <Link to="/carrinho" className="mb-6 inline-block text-sm text-neutral-400">
-        ← Voltar
+    <div>
+      <Link to="/carrinho" className="mb-5 inline-block text-sm text-ink-muted transition-colors duration-200 hover:text-ink">
+        ← Voltar ao carrinho
       </Link>
 
-      <div className="mx-auto max-w-4xl rounded-[32px] border border-white/10 bg-[#121212] p-6 shadow-2xl sm:p-8">
-        {/* ... (cabeçalho mantido igual) */}
+      <div className="mx-auto max-w-4xl">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold sm:text-3xl">Finalizar pedido</h1>
+          <p className="mt-1 text-sm text-ink-muted">
+            {cart.length} {cart.length === 1 ? "produto" : "produtos"} no pedido
+          </p>
+        </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Grade de Imagens + Controles de Quantidade */}
-          <div className="space-y-4 rounded-[24px] border border-white/10 bg-[#171717] p-5">
-            <h3 className="text-sm font-semibold text-neutral-400">Produtos no pedido</h3>
-            <div className="grid gap-4">
-              {carrinho.map((item, index) => (
-                <div key={index} className="flex items-center gap-4 rounded-xl border border-white/5 bg-[#1c1c1c] p-3">
-                  <img src={item.image} alt={item.name} className="h-16 w-16 rounded-lg object-cover" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{item.name}</p>
-                    <div className="mt-2 flex items-center gap-3">
-                      <button 
-                        onClick={() => handleUpdate(item.id, item.color, item.size, -1)}
-                        className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 hover:bg-white/20"
-                      >-</button>
-                      <span className="text-sm font-semibold">{item.quantity}</span>
-                      <button 
-                        onClick={() => handleUpdate(item.id, item.color, item.size, 1)}
-                        className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 hover:bg-white/20"
-                      >+</button>
+        <form onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2">
+            {/* ─── Resumo dos itens ─── */}
+            <div className="rounded-[24px] border border-line bg-surface-2 p-5">
+              <h3 className="mb-4 text-sm font-semibold text-ink-muted">Produtos selecionados</h3>
+              <div className="space-y-3">
+                {cart.map((item) => (
+                  <div
+                    key={`${item.id}-${item.color}-${item.size}`}
+                    className="flex items-center gap-3 rounded-[16px] border border-line bg-elevated p-3"
+                  >
+                    <SafeImage src={item.image} alt={item.name} className="h-14 w-14 flex-shrink-0 rounded-xl object-cover" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{item.name}</p>
+                      <p className="text-xs text-ink-subtle">
+                        {item.color} · {item.size}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 rounded-pill border border-line bg-surface px-1.5 py-1">
+                      <button
+                        type="button"
+                        onClick={() => updateQuantity(item.id, item.color, item.size, -1)}
+                        disabled={item.quantity <= 1}
+                        aria-label="Diminuir quantidade"
+                        className="flex h-6 w-6 items-center justify-center rounded-full text-ink transition-all duration-200 hover:bg-white/10 active:scale-90 disabled:opacity-30 disabled:hover:bg-transparent"
+                      >
+                        −
+                      </button>
+                      <span className="min-w-[1.25rem] text-center text-xs font-medium tabular-nums">{item.quantity}</span>
+                      <button
+                        type="button"
+                        onClick={() => updateQuantity(item.id, item.color, item.size, 1)}
+                        aria-label="Aumentar quantidade"
+                        className="flex h-6 w-6 items-center justify-center rounded-full text-ink transition-all duration-200 hover:bg-white/10 active:scale-90"
+                      >
+                        +
+                      </button>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Resumo da Compra (mantido igual) */}
-          <div className="rounded-[24px] border border-white/10 bg-[#171717] p-5">
-            <h2 className="text-lg font-semibold">Resumo da compra</h2>
-            <div className="mt-4 space-y-3 text-sm text-neutral-300">
-              {carrinho.map((item, index) => (
-                <div key={index} className="flex justify-between">
-                  <span>{item.quantity}x {item.name}</span>
-                  <span>R$ {(item.price * item.quantity).toFixed(2).replace(".", ",")}</span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 border-t border-white/10 pt-4 text-base font-semibold">
-              <div className="flex justify-between">
+                ))}
+              </div>
+              <div className="mt-4 flex items-center justify-between border-t border-line pt-4 text-sm font-semibold">
                 <span>Total</span>
-                <span>R$ {total.toFixed(2).replace(".", ",")}</span>
+                <span className="tabular-nums">{formatBRL(subtotal)}</span>
               </div>
             </div>
-            <button 
-              onClick={handleEnviarWhatsApp}
-              className="mt-6 w-full rounded-full bg-white px-4 py-3 font-semibold text-black hover:bg-neutral-200 transition"
-            >
-              Enviar para WhatsApp
-            </button>
+
+            {/* ─── Formulário ─── */}
+            <div className="rounded-[24px] border border-line bg-surface-2 p-5">
+              <h3 className="mb-4 text-sm font-semibold text-ink-muted">Seus dados</h3>
+              <div className="space-y-4">
+                <Field label="Nome completo" htmlFor="checkout-name" required>
+                  <Input
+                    id="checkout-name"
+                    type="text"
+                    required
+                    autoComplete="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Seu nome"
+                  />
+                </Field>
+                <Field label="WhatsApp / Telefone" htmlFor="checkout-phone" required>
+                  <Input
+                    id="checkout-phone"
+                    type="tel"
+                    required
+                    autoComplete="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="(85) 99999-9999"
+                  />
+                </Field>
+                <Field label="E-mail (opcional)" htmlFor="checkout-email">
+                  <Input
+                    id="checkout-email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="seu@email.com"
+                  />
+                </Field>
+                <Field label="Forma de pagamento" htmlFor="checkout-payment">
+                  <select
+                    id="checkout-payment"
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="w-full rounded-pill border border-line bg-elevated px-4 py-3 text-sm text-ink outline-none transition-colors duration-200 focus:border-accent/60"
+                  >
+                    {PAYMENT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value} className="bg-surface text-ink">
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Button type="submit" size="lg" loading={loading} disabled={cart.length === 0} className="mt-1 w-full">
+                  {loading ? "Enviando" : "Finalizar via WhatsApp"}
+                </Button>
+              </div>
+            </div>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

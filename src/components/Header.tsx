@@ -1,60 +1,127 @@
-import { NavLink, Link } from "react-router-dom";
-import { useContext } from "react";
-import { CarrinhoContext } from "../context/CarrinhoContext"; 
-import logoTNY from "../assets/Ativo 17.png"; 
+import { useRef } from "react";
+import { NavLink, Link, useNavigate } from "react-router-dom";
+import { ShoppingBag, Search } from "lucide-react";
+import { useCarrinho } from "../context/useCarrinho";
+import logoTNY from "../assets/Ativo 17.png";
 
 const navItems = [
   { label: "Início", to: "/" },
+  { label: "Produtos", to: "/produtos" },
   { label: "Promoções", to: "/promocoes" },
   { label: "Institucional", to: "/institucional" },
   { label: "Seja revendedor", to: "/revendedor" },
 ];
 
+function CartButton({ totalItems }: { totalItems: number }) {
+  return (
+    <Link
+      to="/carrinho"
+      aria-label={`Abrir carrinho${totalItems > 0 ? ` com ${totalItems} item(ns)` : ""}`}
+      className="relative flex items-center justify-center rounded-full border border-line bg-white/5 p-2.5 transition-colors duration-200 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+    >
+      <ShoppingBag size={20} className="text-ink" />
+      {totalItems > 0 && (
+        <span
+          key={totalItems}
+          className="absolute -right-1.5 -top-1.5 flex h-5 w-5 animate-bump items-center justify-center rounded-full bg-accent text-[10px] font-bold text-black"
+        >
+          {totalItems > 99 ? "99+" : totalItems}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+function SearchBar({ inputRef, onKeyDown }: { inputRef: React.RefObject<HTMLInputElement | null>; onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void }) {
+  return (
+    <div className="flex items-center gap-2 rounded-full border border-line bg-elevated px-3 py-2 text-ink-muted transition-colors duration-200 focus-within:border-accent/60">
+      <Search size={15} className="flex-shrink-0" />
+      <input
+        ref={inputRef}
+        onKeyDown={onKeyDown}
+        aria-label="Buscar produtos"
+        className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-subtle"
+        placeholder="Buscar produtos..."
+      />
+    </div>
+  );
+}
+
 export function Header() {
-  const carrinhoContext = useContext(CarrinhoContext);
-  const totalItems = carrinhoContext?.totalItems || 0;
+  const { totalItems } = useCarrinho();
+  const navigate = useNavigate();
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      const term = searchRef.current?.value.trim();
+      navigate(term ? `/produtos?q=${encodeURIComponent(term)}` : "/produtos");
+      searchRef.current?.blur();
+    }
+  };
 
   return (
-    <header className="border-b border-neutral-800 bg-[#111] px-4 py-4 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4">
-        <div className="flex items-center justify-between">
-          {/* Logo*/}
-          <Link to="/" className="flex items-center">
-            <img 
-              src={logoTNY} 
-              alt="Logo TNY" 
-              className="h-8 w-auto object-contain" 
-            />
+    <header className="sticky top-0 z-40 border-b border-line bg-surface/95 px-4 py-3 backdrop-blur-md sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
+
+        {/* ─── Desktop: linha única ─── */}
+        <div className="hidden items-center gap-6 lg:flex">
+          <Link to="/" className="flex-shrink-0">
+            <img src={logoTNY} alt="TNY" className="h-8 w-auto object-contain" />
           </Link>
-          
-          <Link to="/carrinho" className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2.5 text-lg">
-            {totalItems > 0 && (
-              <span className="text-xs font-bold text-amber-300">{totalItems}</span>
-            )}
-            🛍️
-          </Link>
-        </div>
-        
-        {/* Barra de busca */}
-        <div className="flex items-center rounded-full border border-white/10 bg-[#1A1A1A] px-4 py-3 text-sm text-neutral-400">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input className="w-full bg-transparent outline-none placeholder:text-neutral-500" placeholder="O que você procura?" />
+
+          <nav className="flex items-center gap-5">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/"}
+                className={({ isActive }) =>
+                  `text-sm transition-colors duration-200 ${isActive ? "font-semibold text-ink" : "text-ink-muted hover:text-ink"}`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+
+          <div className="flex-1" />
+
+          <div className="w-64 xl:w-80">
+            <SearchBar inputRef={searchRef} onKeyDown={handleSearchKeyDown} />
+          </div>
+
+          <CartButton totalItems={totalItems} />
         </div>
 
-        <nav className="flex justify-between gap-4 overflow-x-auto text-sm text-neutral-400">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => `whitespace-nowrap pb-1 transition-colors ${isActive ? "border-b-2 border-white text-white" : "hover:text-white"}`}
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
+        {/* ─── Mobile/Tablet: 3 linhas compactas ─── */}
+        <div className="flex flex-col gap-2 lg:hidden">
+          <div className="flex items-center justify-between">
+            <Link to="/">
+              <img src={logoTNY} alt="TNY" className="h-7 w-auto object-contain" />
+            </Link>
+            <CartButton totalItems={totalItems} />
+          </div>
+
+          <SearchBar inputRef={searchRef} onKeyDown={handleSearchKeyDown} />
+
+          <nav className="flex items-center gap-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/"}
+                className={({ isActive }) =>
+                  `flex-shrink-0 pb-0.5 text-sm transition-colors duration-200 ${
+                    isActive ? "border-b-2 border-accent font-medium text-ink" : "text-ink-muted hover:text-ink"
+                  }`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+        </div>
       </div>
     </header>
   );

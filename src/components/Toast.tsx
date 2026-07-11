@@ -1,13 +1,16 @@
 import { useEffect } from "react";
+import { CheckCircle, AlertCircle } from "lucide-react";
+import type { ToastType } from "../context/ToastContext";
 
 interface ToastProps {
   message: string;
+  type?: ToastType;
   isVisible: boolean;
   onClose: () => void;
   duration?: number;
 }
 
-export const Toast = ({ message, isVisible, onClose, duration = 3000 }: ToastProps) => {
+export const Toast = ({ message, type = "success", isVisible, onClose, duration = 3000 }: ToastProps) => {
   useEffect(() => {
     if (isVisible) {
       const timer = setTimeout(onClose, duration);
@@ -17,9 +20,20 @@ export const Toast = ({ message, isVisible, onClose, duration = 3000 }: ToastPro
 
   if (!isVisible) return null;
 
+  const isError = type === "error";
+  const Icon = isError ? AlertCircle : CheckCircle;
+
   return (
-    <div className="fixed bottom-6 right-6 bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg animate-in fade-in slide-in-from-bottom-4 z-50">
-      <p className="font-semibold">{message}</p>
+    <div
+      role="status"
+      aria-live="polite"
+      className={`fixed right-4 z-50 flex max-w-[calc(100vw-2rem)] animate-slide-up items-center gap-2.5 rounded-xl px-5 py-3 text-black shadow-2xl ${
+        isError ? "bg-danger" : "bg-price"
+      }`}
+      style={{ bottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
+    >
+      <Icon size={18} className="flex-shrink-0" />
+      <p className="text-sm font-semibold">{message}</p>
     </div>
   );
 };

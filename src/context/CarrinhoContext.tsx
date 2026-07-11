@@ -1,11 +1,13 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useMemo, useState, useEffect, type ReactNode } from "react";
 import type { CartItem, Produto } from "../types";
 
 export type CarrinhoContextValue = {
   cart: CartItem[];
-  addToCart: (product: Produto, color?: string, size?: string) => void;
+  addToCart: (product: Produto, color?: string, size?: string, variantId?: number) => void;
   removeFromCart: (id: number, color: string, size: string) => void;
   updateQuantity: (id: number, color: string, size: string, delta: number) => void;
+  clearCart: () => void;
   totalItems: number;
   subtotal: number;
   gerarMensagemWhatsApp: (cartItems?: CartItem[]) => string;
@@ -23,15 +25,16 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("tny_carrinho", JSON.stringify(cart));
   }, [cart]);
 
-  const addToCart = (product: Produto, color = "Padrão", size = "M") => {
+  const addToCart = (product: Produto, color = "Padrão", size = "Único", variantId?: number) => {
     const newItem: CartItem = {
       id: product.id,
       name: product.name,
-      price: product.price,
+      price: product.promotional_price ?? product.price,
       image: product.image,
       color,
       size,
       quantity: 1,
+      variantId,
     };
 
     setCart((prev) => {
@@ -65,21 +68,17 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  const clearCart = () => setCart([]);
+
   const totalItems = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
 
   const gerarMensagemWhatsApp = useCallback(
     (cartItems: CartItem[] = cart) => {
       const itensTexto = cartItems
-        .map((item) => {
-          const linkProduto = `${window.location.origin}/produto/${item.id}`;
-          // Removido o \n antes do link para evitar problemas de formatação no WhatsApp
-          return `${item.quantity}x ${item.name} (${item.color} / ${item.size}) - Confira: ${linkProduto}`;
-        })
-        .join("\n\n");
-
+        .map((item) => `${item.quantity}x ${item.name} (${item.color} / ${item.size})`)
+        .join("\n");
       const subtotalTexto = subtotal.toFixed(2).replace(".", ",");
-
       return [
         "Olá! Quero finalizar a compra da TNY.",
         "",
@@ -92,15 +91,7 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({
-      cart,
-      addToCart,
-      removeFromCart,
-      updateQuantity,
-      totalItems,
-      subtotal,
-      gerarMensagemWhatsApp,
-    }),
+    () => ({ cart, addToCart, removeFromCart, updateQuantity, clearCart, totalItems, subtotal, gerarMensagemWhatsApp }),
     [cart, subtotal, totalItems, gerarMensagemWhatsApp],
   );
 

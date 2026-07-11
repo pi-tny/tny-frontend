@@ -1,36 +1,62 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { subscribeLead } from "../services/api";
+import { useToast } from "../context/useToast";
+import { Button, Input } from "./ui";
 import logoTny from "../assets/Ativo 17.png";
 import { useForm } from '@formspree/react';
 
 export function Footer() {
-  const [state, handleSubmit] = useForm("mqevvqvn");
+  const { showToast } = useToast();
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleNewsletterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await subscribeLead({ name: nome, email, phone: telefone, marketing_consent: true });
+      showToast("Inscrição realizada com sucesso!");
+      setNome("");
+      setEmail("");
+      setTelefone("");
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Erro ao se inscrever", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <footer className="mt-10 border-t border-neutral-800 bg-[#111] px-6 py-8 text-neutral-400 sm:px-8 lg:px-10">
+    <footer className="mt-10 border-t border-line bg-surface px-6 py-8 text-ink-muted sm:px-8 lg:px-10">
       <div className="mx-auto flex max-w-7xl flex-col gap-8 lg:flex-row lg:justify-between">
         <div className="max-w-sm">
-          <img src={logoTny} alt="Logo TNY" className="mb-2 h-10 w-auto" />
-          <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+          <img src={logoTny} alt="TNY Menswear" className="mb-2 h-9 w-auto" />
+          <p className="text-xs uppercase tracking-[0.3em] text-ink-subtle">
             Todos os direitos reservados. ®
           </p>
         </div>
 
-        <div className="grid gap-8 text-sm md:grid-cols-2 lg:grid-cols-3 lg:flex-1">
+        <div className="grid gap-7 text-sm md:grid-cols-3 lg:flex-1">
           <div>
-            <p className="mb-3 font-semibold text-white">Atendimento</p>
-            <div className="space-y-2 text-sm text-neutral-300">
-              <p>Atendimento Online 1: Whatsapp (85) 98102-5616</p>
-              <p>Atendimento Online 2: Whatsapp (85) 98181-9448</p>
+            <p className="mb-3 font-semibold text-ink">Atendimento</p>
+            <div className="space-y-1.5 text-ink-muted">
+              <p>WhatsApp: (85) 98102-5616</p>
+              <p>WhatsApp: (85) 98181-9448</p>
+              <Link to="/faq" className="inline-block text-ink-muted underline-offset-4 transition-colors hover:text-accent hover:underline">
+                Dúvidas, trocas e entregas
+              </Link>
             </div>
           </div>
-
           <div>
-            <p className="mb-3 font-semibold text-white">E-mail</p>
-            <p className="text-sm text-neutral-300">E-mail: tnymenswear@gmail.com</p>
+            <p className="mb-3 font-semibold text-ink">E-mail</p>
+            <p className="text-ink-muted">contato@tnymenswear.com.br</p>
           </div>
-
           <div>
-            <p className="mb-3 font-semibold text-white">Redes sociais</p>
-            <div className="space-y-2 text-sm text-neutral-300">
+            <p className="mb-3 font-semibold text-ink">Redes sociais</p>
+            <div className="space-y-1.5 text-ink-muted">
               <p>Instagram: @tnymenswear</p>
               <p>Facebook: TNY Menswear</p>
             </div>
@@ -38,30 +64,43 @@ export function Footer() {
         </div>
       </div>
 
-      <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-white/10 bg-[#1a1a1a] p-4 sm:p-6">
-        {state.succeeded ? (
-          <p className="text-emerald-300 font-semibold">Obrigado pela inscrição!</p>
-        ) : (
-          <>
-            <p className="mb-3 text-sm font-semibold text-white">Cadastre seu e-mail e receba nossas novidades</p>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
-              <input
-                type="email"
-                name="email"
-                required
-                placeholder="Seu e-mail"
-                className="flex-1 rounded-full border border-white/10 bg-[#0f0f0f] px-4 py-3 text-sm text-white outline-none ring-0 placeholder:text-neutral-500"
-              />
-              <button 
-                type="submit" 
-                disabled={state.submitting}
-                className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-neutral-200 disabled:opacity-50"
-              >
-                {state.submitting ? "Enviando..." : "Inscrever-se"}
-              </button>
-            </form>
-          </>
-        )}
+      {/* Newsletter */}
+      <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-line bg-surface-2 p-6 sm:p-8">
+        <p className="mb-4 text-sm font-semibold text-ink">
+          Cadastre-se e receba nossas novidades
+        </p>
+        <form onSubmit={handleNewsletterSubmit} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap lg:flex-nowrap">
+          <Input
+            type="text"
+            required
+            aria-label="Seu nome"
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            placeholder="Seu nome"
+            className="flex-1"
+          />
+          <Input
+            type="email"
+            required
+            aria-label="Seu e-mail"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Seu e-mail"
+            className="flex-1"
+          />
+          <Input
+            type="tel"
+            required
+            aria-label="Seu telefone"
+            value={telefone}
+            onChange={(e) => setTelefone(e.target.value)}
+            placeholder="Seu telefone"
+            className="flex-1"
+          />
+          <Button type="submit" size="lg" loading={loading} className="flex-shrink-0">
+            {loading ? "Enviando" : "Inscrever-se"}
+          </Button>
+        </form>
       </div>
     </footer>
   );

@@ -1,30 +1,111 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ShoppingBag } from "lucide-react";
+import { getProductById } from "../services/api";
+import { useCarrinho } from "../context/useCarrinho";
 import { useToast } from "../context/useToast";
-import type { Produto } from "../types";
+import { Badge, SafeImage, Spinner } from "./ui";
 
 interface CardProdutoProps {
-  produto: Produto;
-  onAddToCart: (produto: Produto) => void;
+  id: number;
+  name: string;
+  image: string;
+  price: number;
+  promotional_price?: number | null;
+  badge?: string;
 }
 
-export const CardProduto = ({ produto, onAddToCart }: CardProdutoProps) => {
-  const { showToast } = useToast();
+function formatBRL(value: number): string {
+  return `R$ ${value.toFixed(2).replace(".", ",")}`;
+}
 
-  const handleClick = () => {
-    onAddToCart(produto);
-    showToast("Adicionado com sucesso!");
+export function CardProduto({ id, name, image, price, promotional_price, badge }: CardProdutoProps) {
+  const navigate = useNavigate();
+  const { addToCart } = useCarrinho();
+  const { showToast } = useToast();
+  const [adding, setAdding] = useState(false);
+
+  const isOnSale = !!promotional_price && promotional_price < price;
+  const displayBadge = badge ?? (isOnSale ? "Promoção" : undefined);
+
+  // Adiciona a variante da capa (1ª com estoque) sem sair da vitrine.
+  const handleQuickAdd = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (adding) return;
+    setAdding(true);
+    try {
+      const detail = await getProductById(id);
+      const variant = detail.variants.find((v) => v.quantity > 0) ?? detail.variants[0];
+      if (!variant) {
+        showToast("Selecione as opções na página do produto.", "error");
+        navigate(`/produto/${id}`);
+        return;
+      }
+      if (variant.quantity <= 0) {
+        showToast("Produto sem estoque no momento.", "error");
+        return;
+      }
+      addToCart(
+        { id, name, price, promotional_price, image },
+        variant.color,
+        variant.size,
+        variant.id,
+      );
+      showToast("Adicionado ao carrinho!");
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Erro ao adicionar", "error");
+    } finally {
+      setAdding(false);
+    }
   };
 
   return (
-    <div className="border border-white/10 bg-[#141414] rounded-[24px] p-4 flex flex-col gap-3">
-      <img src={produto.image} alt={produto.name} className="h-48 w-full object-cover rounded-xl" />
-      <h3 className="text-white font-semibold">{produto.name}</h3>
-      <p className="text-emerald-400 font-bold">R$ {produto.price.toFixed(2).replace(".", ",")}</p>
-      <button 
-        onClick={handleClick}
-        className="bg-white text-black py-2 rounded-lg font-semibold hover:bg-neutral-200"
-      >
-        Adicionar
-      </button>
-    </div>
+    <article
+      onClick={() => navigate(`/produto/${id}`)}
+      className="group cursor-pointer overflow-hidden rounded-card border border-line bg-surface-2 transition-all duration-200 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_8px_32px_rgba(0,0,0,0.6)]"
+    >
+      {/* Imagem com aspecto 3:4 (portrait) */}
+      <div className="relative overflow-hidden">
+        <div className="aspect-[3/4]">
+          <SafeImage
+            src={image}
+            alt={name}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+            loading="lazy"
+          />
+        </div>
+        {displayBadge && (
+          <Badge tone={isOnSale ? "accent" : "neutral"} className="absolute left-3 top-3">
+            {displayBadge}
+          </Badge>
+        )}
+      </div>
+
+      {/* Conteúdo */}
+      <div className="p-4">
+        <p className="line-clamp-2 text-sm font-medium leading-snug text-ink">{name}</p>
+        <div className="mt-2 flex items-baseline gap-2 tabular-nums">
+          {isOnSale ? (
+            <>
+              <p className="text-base font-bold text-price">{formatBRL(promotional_price)}</p>
+              <p className="text-xs text-ink-subtle line-through">{formatBRL(price)}</p>
+            </>
+          ) : (
+            <p className="text-base font-bold text-ink">{formatBRL(price)}</p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={handleQuickAdd}
+          disabled={adding}
+          aria-label={`Adicionar ${name} ao carrinho`}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-pill border border-line bg-white/5 py-2 text-xs font-semibold text-ink transition-all duration-200 hover:border-accent/50 hover:bg-white/10 active:scale-95 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+        >
+          {adding ? <Spinner className="h-3.5 w-3.5" /> : <ShoppingBag size={14} />}
+          {adding ? "Adicionando" : "Adicionar"}
+        </button>
+      </div>
+    </article>
   );
-};
+}
