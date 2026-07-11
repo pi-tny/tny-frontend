@@ -1,1 +1,111 @@
 @import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────
+   TNY — Design tokens (dark premium)
+   Paleta em camadas + 3 papéis de cor:
+     • branco  → ação primária (CTA)
+     • dourado → accent de marca (foco, nav ativo, destaques)
+     • esmeralda → preço / sucesso
+   Tipografia: Syne (display) + Manrope (corpo)
+   ───────────────────────────────────────────────────────────── */
+@theme {
+  /* Tipografia */
+  --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Syne", "Manrope", ui-sans-serif, sans-serif;
+
+  /* Superfícies */
+  --color-bg: #060606;
+  --color-surface: #101012;
+  --color-surface-2: #151517;
+  --color-elevated: #1b1b1e;
+  --color-line: #ffffff1a; /* white/10 */
+  --color-line-strong: #ffffff2e; /* white/18 */
+
+  /* Texto */
+  --color-ink: #f4f4f5;
+  --color-ink-muted: #a1a1aa;
+  --color-ink-subtle: #71717a;
+
+  /* Papéis semânticos */
+  --color-accent: #d9a441; /* dourado de marca */
+  --color-accent-strong: #ecc06a;
+  --color-price: #34d399; /* esmeralda — preço/sucesso */
+  --color-danger: #f87171;
+
+  /* Raios */
+  --radius-card: 20px;
+  --radius-pill: 9999px;
+
+  /* Animações */
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-slide-up: slide-up 0.25s ease-out;
+  --animate-bump: bump 0.35s ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bump {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.35);
+  }
+  60% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+}
