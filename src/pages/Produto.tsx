@@ -1,9 +1,9 @@
-import { useReducer, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Copy, Share2 } from "lucide-react";
-import { getProductById, getRelatedProducts } from "../services/api";
-import type { ApiImage, ApiVariant, ProductDetail, ProductSummary } from "../types";
+import { useProduct, useRelatedProducts } from "../hooks/queries";
+import type { ApiImage, ApiVariant, ProductDetail } from "../types";
 import { useCarrinho } from "../context/useCarrinho";
 import { useToast } from "../context/useToast";
 import { CardProduto } from "../components/CardProduto";
@@ -29,8 +29,8 @@ function formatBRL(value: number): string {
 }
 
 /**
- * Galeria por cor: se a cor selecionada tem imagens próprias (variante), mostra
- * essas; senão cai para as imagens gerais do produto; por fim, para a capa.
+ * gallery by color: if the selected color has its own (variant) images, show
+ * those; otherwise fall back to the product's general images, then to the cover.
  */
 function resolveDisplayImages(product: ProductDetail, color: string): ApiImage[] {
   const byPosition = (a: ApiImage, b: ApiImage) => a.position - b.position;
@@ -46,81 +46,32 @@ function resolveDisplayImages(product: ProductDetail, color: string): ApiImage[]
     : [];
 }
 
-type ProdState = { product: ProductDetail | null; loading: boolean; error: string | null };
-type ProdAction =
-  | { type: "FETCH" }
-  | { type: "SUCCESS"; product: ProductDetail }
-  | { type: "ERROR"; error: string };
-
-function prodReducer(_s: ProdState, a: ProdAction): ProdState {
-  switch (a.type) {
-    case "FETCH":
-      return { product: null, loading: true, error: null };
-    case "SUCCESS":
-      return { product: a.product, loading: false, error: null };
-    case "ERROR":
-      return { product: null, loading: false, error: a.error };
-  }
-}
-
-type RelState = { related: ProductSummary[]; loading: boolean };
-type RelAction = { type: "FETCH" } | { type: "SUCCESS"; related: ProductSummary[] } | { type: "DONE" };
-
-function relReducer(_s: RelState, a: RelAction): RelState {
-  switch (a.type) {
-    case "FETCH":
-      return { related: [], loading: true };
-    case "SUCCESS":
-      return { related: a.related, loading: false };
-    case "DONE":
-      return { related: [], loading: false };
-  }
-}
-
 export function Produto() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToCart, updateQuantity } = useCarrinho();
   const { showToast } = useToast();
 
-  const [prodState, prodDispatch] = useReducer(prodReducer, { product: null, loading: true, error: null });
-  const [relState, relDispatch] = useReducer(relReducer, { related: [], loading: false });
+  const productId = id ? Number(id) : undefined;
+  const { data: product, isLoading, error } = useProduct(productId);
+  const { data: related = [], isLoading: relatedLoading } = useRelatedProducts(product?.id);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
-  const [selectedColor, setSelectedColor] = useState("");
-  const [selectedSize, setSelectedSize] = useState("");
   const [qty, setQty] = useState(1);
+  // user's color/size choice, scoped to a product id so it resets on navigation.
+  const [choice, setChoice] = useState<{ id: number; color: string; size?: string }>();
 
-  useEffect(() => {
-    if (!id) return;
-    prodDispatch({ type: "FETCH" });
-    getProductById(Number(id))
-      .then((data) => {
-        const colors = [...new Set(data.variants.map((v) => v.color))];
-        const initialColor = colors[0] ?? "";
-        if (initialColor) {
-          setSelectedColor(initialColor);
-          const sizes = data.variants.filter((v) => v.color === initialColor).map((v) => v.size);
-          if (sizes[0]) setSelectedSize(sizes[0]);
-        }
-        setActiveIndex(0);
-        prodDispatch({ type: "SUCCESS", product: data });
-      })
-      .catch((err: Error) => prodDispatch({ type: "ERROR", error: err.message }));
-  }, [id]);
+  const colors = product ? [...new Set(product.variants.map((v) => v.color))] : [];
+  const activeChoice = product && choice?.id === product.id ? choice : undefined;
+  const selectedColor = activeChoice?.color ?? colors[0] ?? "";
+  const sizesForColor = product
+    ? product.variants.filter((v) => v.color === selectedColor).map((v) => v.size)
+    : [];
+  const selectedSize = activeChoice?.size ?? sizesForColor[0] ?? "";
 
+  // auto carousel: the main image advances every 5s (pauses on hover).
   useEffect(() => {
-    if (!prodState.product) return;
-    relDispatch({ type: "FETCH" });
-    getRelatedProducts(prodState.product.id)
-      .then((data) => relDispatch({ type: "SUCCESS", related: data }))
-      .catch(() => relDispatch({ type: "DONE" }));
-  }, [prodState.product]);
-
-  // Carrossel automático: a imagem principal avança a cada 5s (pausa no hover).
-  useEffect(() => {
-    const product = prodState.product;
     if (!product || paused) return;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduceMotion) return;
@@ -128,19 +79,18 @@ export function Produto() {
     if (count <= 1) return;
     const timer = setInterval(() => setActiveIndex((i) => (i + 1) % count), 5000);
     return () => clearInterval(timer);
-  }, [prodState.product, selectedColor, paused]);
+  }, [product, selectedColor, paused]);
 
   const handleColorSelect = (color: string) => {
-    setSelectedColor(color);
-    const sizes = prodState.product?.variants.filter((v) => v.color === color).map((v) => v.size) ?? [];
-    if (sizes[0]) setSelectedSize(sizes[0]);
-    // Troca a galeria para as imagens da cor selecionada (reinicia no início).
+    if (!product) return;
+    // switch the gallery to the selected color's images (restart at the beginning).
+    setChoice({ id: product.id, color });
     setActiveIndex(0);
     setQty(1);
   };
 
-  /* ─── Loading ─── */
-  if (prodState.loading) {
+  /* loading */
+  if (isLoading) {
     return (
       <div className="mx-auto grid max-w-6xl animate-pulse gap-8 rounded-[28px] border border-line bg-surface p-5 sm:p-6 md:grid-cols-2 lg:grid-cols-[1.1fr_0.9fr] lg:p-8">
         <div className="flex flex-col gap-4">
@@ -163,15 +113,15 @@ export function Produto() {
     );
   }
 
-  /* ─── Error / not found ─── */
-  if (prodState.error || !prodState.product) {
+  /* error / not found */
+  if (error || !product) {
     return (
       <div>
         <Link to="/produtos" className="mb-6 inline-block text-sm text-ink-muted transition-colors hover:text-ink">
           ← Voltar para a loja
         </Link>
         <div className="mx-auto max-w-md rounded-[24px] border border-line bg-surface-2 p-8 text-center">
-          <h1 className="text-xl font-semibold">{prodState.error ?? "Produto não encontrado"}</h1>
+          <h1 className="text-xl font-semibold">{error?.message ?? "Produto não encontrado"}</h1>
           <Link
             to="/produtos"
             className="mt-4 inline-flex rounded-pill bg-white px-6 py-2.5 text-sm font-semibold text-black transition-all duration-200 hover:bg-neutral-100"
@@ -183,9 +133,6 @@ export function Produto() {
     );
   }
 
-  const product = prodState.product;
-  const colors = [...new Set(product.variants.map((v) => v.color))];
-  const sizesForColor = product.variants.filter((v) => v.color === selectedColor).map((v) => v.size);
   const selectedVariant: ApiVariant | undefined = product.variants.find(
     (v) => v.color === selectedColor && v.size === selectedSize,
   );
@@ -215,7 +162,7 @@ export function Produto() {
         showToast("Link copiado!");
       }
     } catch {
-      // usuário cancelou o compartilhamento — ignora
+      // user cancelled the share — ignore
     }
   };
 
@@ -238,7 +185,7 @@ export function Produto() {
       selectedSize,
       selectedVariant?.id,
     );
-    // addToCart insere 1 unidade; completa até a quantidade escolhida.
+    // addToCart inserts 1 unit; top it up to the chosen quantity.
     if (safeQty > 1) {
       updateQuantity(product.id, selectedColor, selectedSize, safeQty - 1);
     }
@@ -252,7 +199,7 @@ export function Produto() {
 
   return (
     <div>
-      {/* SEO / Open Graph */}
+      {/* seo / open graph */}
       <Helmet>
         <title>{product.name} | TNY Menswear</title>
         <meta
@@ -269,7 +216,7 @@ export function Produto() {
         <meta property="og:url" content={window.location.href} />
       </Helmet>
 
-      {/* Breadcrumb */}
+      {/* breadcrumb */}
       <nav aria-label="Trilha de navegação" className="mb-5 flex items-center gap-1.5 text-sm text-ink-muted">
         <Link to="/" className="transition-colors hover:text-ink">Início</Link>
         <span className="text-ink-subtle">/</span>
@@ -289,9 +236,9 @@ export function Produto() {
         <span className="truncate text-ink">{product.name}</span>
       </nav>
 
-      {/* ─── Detalhes ─── */}
+      {/* details */}
       <div className="mx-auto grid max-w-6xl gap-6 rounded-[28px] border border-line bg-surface p-5 shadow-2xl sm:p-6 md:grid-cols-2 lg:grid-cols-[1.1fr_0.9fr] lg:gap-8 lg:p-8">
-        {/* Imagens */}
+        {/* images */}
         <div className="flex flex-col gap-3">
           <div
             className="relative overflow-hidden rounded-[20px] border border-line bg-surface-2"
@@ -305,7 +252,7 @@ export function Produto() {
                 className="h-full w-full object-cover transition-opacity duration-500"
               />
             </div>
-            {/* Indicadores (quando há mais de uma imagem) */}
+            {/* indicators (when there's more than one image) */}
             {displayImages.length > 1 && (
               <div className="absolute inset-x-0 bottom-3 flex justify-center gap-1.5">
                 {displayImages.map((img, i) => (
@@ -321,7 +268,7 @@ export function Produto() {
             )}
           </div>
 
-          {/* Carrossel de miniaturas (horizontal) */}
+          {/* thumbnail carousel (horizontal) */}
           {displayImages.length > 1 && (
             <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {displayImages.map((img, i) => (
@@ -342,7 +289,7 @@ export function Produto() {
           )}
         </div>
 
-        {/* Detalhes */}
+        {/* details */}
         <div className="flex flex-col justify-center">
           {product.categories[0] && (
             <p className="text-xs uppercase tracking-[0.35em] text-accent">{product.categories[0].name}</p>
@@ -358,7 +305,7 @@ export function Produto() {
             <Copy size={12} />
           </button>
 
-          {/* Preço */}
+          {/* price */}
           <div className="mt-3 flex items-baseline gap-3 tabular-nums">
             <p className="text-2xl font-bold text-price">{formatBRL(displayPrice)}</p>
             {isOnSale && <p className="text-base text-ink-subtle line-through">{formatBRL(product.price)}</p>}
@@ -368,7 +315,7 @@ export function Produto() {
             <p className="mt-4 text-sm leading-relaxed text-ink-muted">{product.description}</p>
           )}
 
-          {/* Cores */}
+          {/* colors */}
           {colors.length > 0 && (
             <div className="mt-5">
               <p className="mb-2.5 text-xs font-semibold uppercase tracking-[0.25em] text-ink-muted">Cor</p>
@@ -398,7 +345,7 @@ export function Produto() {
             </div>
           )}
 
-          {/* Tamanhos */}
+          {/* sizes */}
           {sizesForColor.length > 0 && (
             <div className="mt-5">
               <p className="mb-2.5 text-xs font-semibold uppercase tracking-[0.25em] text-ink-muted">Tamanho</p>
@@ -410,7 +357,7 @@ export function Produto() {
                     <button
                       key={size}
                       type="button"
-                      onClick={() => !unavailable && setSelectedSize(size)}
+                      onClick={() => !unavailable && setChoice({ id: product.id, color: selectedColor, size })}
                       disabled={unavailable}
                       className={cn(
                         "flex min-h-[40px] min-w-[44px] items-center justify-center rounded-pill border px-3 text-sm transition-all duration-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
@@ -439,7 +386,7 @@ export function Produto() {
             </p>
           )}
 
-          {/* Quantidade */}
+          {/* quantity */}
           {!outOfStock && (
             <div className="mt-5 flex items-center gap-3">
               <span className="text-xs font-semibold uppercase tracking-[0.25em] text-ink-muted">Qtd</span>
@@ -467,7 +414,7 @@ export function Produto() {
             </div>
           )}
 
-          {/* Botões */}
+          {/* buttons */}
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <Button type="button" size="lg" onClick={handleAddToCart} disabled={outOfStock} className="flex-1">
               {outOfStock ? "Sem estoque" : "Adicionar ao carrinho"}
@@ -487,20 +434,20 @@ export function Produto() {
         </div>
       </div>
 
-      {/* ─── Veja Também ─── */}
-      {(relState.loading || relState.related.length > 0) && (
+      {/* related products */}
+      {(relatedLoading || related.length > 0) && (
         <div className="mx-auto mt-10 max-w-6xl">
           <h2 className="mb-4 text-base font-semibold sm:text-lg">Veja Também</h2>
           <div className="relative">
             <div className="pointer-events-none absolute right-0 top-0 z-10 h-full w-10 bg-gradient-to-l from-bg to-transparent" />
             <div className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {relState.loading
+              {relatedLoading
                 ? Array.from({ length: 4 }).map((_, i) => (
                     <div key={i} className="w-[160px] flex-shrink-0 sm:w-[200px]">
                       <SkeletonCard />
                     </div>
                   ))
-                : relState.related.map((p) => (
+                : related.map((p) => (
                     <div key={p.id} className="w-[160px] flex-shrink-0 sm:w-[200px]">
                       <CardProduto
                         id={p.id}

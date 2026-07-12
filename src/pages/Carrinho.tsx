@@ -37,7 +37,7 @@ export function Carrinho() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-[1.2fr_0.8fr]">
-          {/* ─── Lista de itens ─── */}
+          {/* item list */}
           <div className="space-y-3">
             {cart.length === 0 ? (
               <EmptyState
@@ -76,7 +76,7 @@ export function Carrinho() {
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      {/* Quantidade */}
+                      {/* quantity */}
                       <div className="flex items-center gap-1 rounded-pill border border-line bg-elevated px-1.5 py-1">
                         <button
                           onClick={() => updateQuantity(item.id, item.color, item.size, -1)}
@@ -95,7 +95,7 @@ export function Carrinho() {
                           +
                         </button>
                       </div>
-                      {/* Ações: ver produto + excluir → confirmar/cancelar */}
+                      {/* actions: view product + delete -> confirm/cancel */}
                       {isConfirming ? (
                         <div className="flex items-center gap-1.5 animate-fade-in">
                           <button
@@ -139,7 +139,7 @@ export function Carrinho() {
             )}
           </div>
 
-          {/* ─── Resumo ─── */}
+          {/* summary */}
           <div className="rounded-[24px] border border-line bg-surface-2 p-5 md:sticky md:top-24 md:self-start">
             <h2 className="text-base font-semibold">Resumo do pedido</h2>
             <div className="mt-4 space-y-2.5 text-sm text-ink-muted">

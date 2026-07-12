@@ -1,35 +1,27 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Pencil, Trash2, X } from "lucide-react";
-import {
-  adminCreateCategory,
-  adminDeleteCategory,
-  adminListCategories,
-  adminUpdateCategory,
-} from "../../services/api";
+import { useAdminCategories } from "../../hooks/queries";
+import { useCreateCategory, useDeleteCategory, useUpdateCategory } from "../../hooks/mutations";
 import type { Category } from "../../types";
 import { useToast } from "../../context/useToast";
+import { categorySchema, validateForm } from "../../lib/validation";
 import { Button, EmptyState, Field, Input, Spinner } from "../../components/ui";
 
 export function Categorias() {
   const navigate = useNavigate();
   const { showToast } = useToast();
 
-  const [categories, setCategories] = useState<Category[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data, isLoading, error } = useAdminCategories();
+  const categories = data?.data ?? [];
+  const createCategory = useCreateCategory();
+  const updateCategory = useUpdateCategory();
+  const deleteCategory = useDeleteCategory();
+  const saving = createCategory.isPending || updateCategory.isPending;
+
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const reload = () =>
-    adminListCategories()
-      .then((r) => setCategories(r.data))
-      .catch((e: Error) => setError(e.message));
-
-  useEffect(() => {
-    reload();
-  }, []);
 
   const resetForm = () => {
     setEditingId(null);
@@ -43,34 +35,29 @@ export function Categorias() {
     setDescription(cat.description ?? "");
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
-    setSaving(true);
-    try {
-      const body = { name: name.trim(), description: description.trim() || null };
-      if (editingId) await adminUpdateCategory(editingId, body);
-      else await adminCreateCategory(body);
+    if (!validateForm(categorySchema, { name }, (m) => showToast(m, "error"))) return;
+    const body = { name: name.trim(), description: description.trim() || null };
+    const onError = (err: unknown) =>
+      showToast(err instanceof Error ? err.message : "Erro ao salvar categoria", "error");
+    const onSuccess = () => {
       showToast(editingId ? "Categoria atualizada." : "Categoria criada.");
       resetForm();
-      await reload();
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Erro ao salvar categoria", "error");
-    } finally {
-      setSaving(false);
-    }
+    };
+    if (editingId) updateCategory.mutate({ id: editingId, body }, { onSuccess, onError });
+    else createCategory.mutate(body, { onSuccess, onError });
   };
 
-  const handleDelete = async (cat: Category) => {
+  const handleDelete = (cat: Category) => {
     if (!confirm(`Excluir a categoria "${cat.name}"?`)) return;
-    try {
-      await adminDeleteCategory(cat.id);
-      showToast("Categoria excluída.");
-      if (editingId === cat.id) resetForm();
-      await reload();
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Erro ao excluir categoria", "error");
-    }
+    deleteCategory.mutate(cat.id, {
+      onSuccess: () => {
+        showToast("Categoria excluída.");
+        if (editingId === cat.id) resetForm();
+      },
+      onError: (err) => showToast(err instanceof Error ? err.message : "Erro ao excluir categoria", "error"),
+    });
   };
 
   return (
@@ -82,7 +69,7 @@ export function Categorias() {
         </Button>
       </div>
 
-      {/* Formulário criar/editar */}
+      {/* create/edit form */}
       <form onSubmit={handleSubmit} className="mb-6 space-y-4 rounded-card border border-line bg-surface-2 p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-ink-muted">
@@ -107,11 +94,11 @@ export function Categorias() {
         </div>
       </form>
 
-      {/* Lista */}
+      {/* list */}
       {error && (
-        <div className="mb-4 rounded-[16px] border border-danger/20 bg-danger/5 p-4 text-center text-sm text-danger">{error}</div>
+        <div className="mb-4 rounded-[16px] border border-danger/20 bg-danger/5 p-4 text-center text-sm text-danger">{error.message}</div>
       )}
-      {categories === null ? (
+      {isLoading ? (
         <div className="flex min-h-[20vh] items-center justify-center text-ink-muted">
           <Spinner className="h-6 w-6" />
         </div>

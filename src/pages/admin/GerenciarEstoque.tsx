@@ -1,13 +1,9 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ChevronDown, Pencil, Plus, Search } from "lucide-react";
-import {
-  adminListProducts,
-  adminUpdateProduct,
-  adminGetProduct,
-  adminUpdateVariant,
-} from "../../services/api";
-import type { ApiVariant, PaginationMeta, ProductSummary } from "../../types";
+import { useAdminProduct, useAdminProducts } from "../../hooks/queries";
+import { useUpdateProduct, useUpdateVariant } from "../../hooks/mutations";
+import type { ApiVariant, ProductSummary } from "../../types";
 import { useToast } from "../../context/useToast";
 import { Badge, Button, EmptyState, Input, SafeImage, Spinner, cn } from "../../components/ui";
 
@@ -17,65 +13,30 @@ function formatBRL(value: number): string {
   return `R$ ${value.toFixed(2).replace(".", ",")}`;
 }
 
-type LState = {
-  items: ProductSummary[];
-  meta: PaginationMeta | null;
-  loading: boolean;
-  error: string | null;
-};
-type LAction =
-  | { type: "FETCH" }
-  | { type: "SUCCESS"; items: ProductSummary[]; meta: PaginationMeta }
-  | { type: "ERROR"; error: string }
-  | { type: "UPDATE_ITEM"; item: ProductSummary };
-
-function reducer(s: LState, a: LAction): LState {
-  switch (a.type) {
-    case "FETCH":
-      return { ...s, loading: true, error: null };
-    case "SUCCESS":
-      return { items: a.items, meta: a.meta, loading: false, error: null };
-    case "ERROR":
-      return { ...s, loading: false, error: a.error };
-    case "UPDATE_ITEM":
-      return { ...s, items: s.items.map((p) => (p.id === a.item.id ? a.item : p)) };
-  }
-}
-
-// ─── Editor de estoque por variante (carrega sob demanda ao expandir) ───
+// per-variant stock editor (loads on demand when expanded)
 function VariantesEditor({ productId }: { productId: number }) {
   const { showToast } = useToast();
-  const [variants, setVariants] = useState<ApiVariant[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data: product, isLoading, error } = useAdminProduct(productId);
+  const variants = product?.variants;
+  const updateVariant = useUpdateVariant();
+  // per-variant edits; a missing entry means "unchanged from the server value".
   const [drafts, setDrafts] = useState<Record<number, string>>({});
-  const [savingId, setSavingId] = useState<number | null>(null);
+  const draftOf = (v: ApiVariant) => drafts[v.id] ?? String(v.quantity);
 
-  useEffect(() => {
-    adminGetProduct(productId)
-      .then((p) => {
-        setVariants(p.variants);
-        setDrafts(Object.fromEntries(p.variants.map((v) => [v.id, String(v.quantity)])));
-      })
-      .catch((e: Error) => setError(e.message));
-  }, [productId]);
-
-  const saveQuantity = async (v: ApiVariant) => {
-    const draft = drafts[v.id];
-    if (draft === undefined || Number(draft) === v.quantity) return;
-    setSavingId(v.id);
-    try {
-      const updated = await adminUpdateVariant(v.id, { quantity: Number(draft) });
-      setVariants((prev) => prev?.map((x) => (x.id === v.id ? updated : x)) ?? null);
-      showToast("Estoque atualizado.");
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : "Erro ao salvar estoque", "error");
-    } finally {
-      setSavingId(null);
-    }
+  const saveQuantity = (v: ApiVariant) => {
+    const draft = draftOf(v);
+    if (Number(draft) === v.quantity) return;
+    updateVariant.mutate(
+      { id: v.id, body: { quantity: Number(draft) } },
+      {
+        onSuccess: () => showToast("Estoque atualizado."),
+        onError: (e) => showToast(e instanceof Error ? e.message : "Erro ao salvar estoque", "error"),
+      },
+    );
   };
 
-  if (error) return <p className="p-4 text-sm text-danger">{error}</p>;
-  if (!variants) {
+  if (error) return <p className="p-4 text-sm text-danger">{error.message}</p>;
+  if (isLoading || !variants) {
     return (
       <div className="flex items-center gap-2 p-4 text-sm text-ink-muted">
         <Spinner /> Carregando variantes…
@@ -97,7 +58,7 @@ function VariantesEditor({ productId }: { productId: number }) {
             <Input
               type="number"
               min="0"
-              value={drafts[v.id] ?? ""}
+              value={draftOf(v)}
               onChange={(e) => setDrafts((d) => ({ ...d, [v.id]: e.target.value }))}
               className="w-24 py-2"
               aria-label={`Estoque ${v.color} ${v.size}`}
@@ -106,8 +67,8 @@ function VariantesEditor({ productId }: { productId: number }) {
           <Button
             size="sm"
             variant="ghost"
-            loading={savingId === v.id}
-            disabled={Number(drafts[v.id]) === v.quantity}
+            loading={updateVariant.isPending && updateVariant.variables?.id === v.id}
+            disabled={Number(draftOf(v)) === v.quantity}
             onClick={() => saveQuantity(v)}
           >
             Salvar
@@ -126,37 +87,33 @@ export function GerenciarEstoque() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [togglingId, setTogglingId] = useState<number | null>(null);
 
-  const [state, dispatch] = useReducer(reducer, { items: [], meta: null, loading: true, error: null });
-
-  useEffect(() => {
-    dispatch({ type: "FETCH" });
-    adminListProducts({ q: query || undefined, page, limit: PAGE_SIZE, sort: "newest" })
-      .then((res) => dispatch({ type: "SUCCESS", items: res.data, meta: res.meta }))
-      .catch((err: Error) => dispatch({ type: "ERROR", error: err.message }));
-  }, [query, page]);
+  const { data, isLoading, error } = useAdminProducts({
+    q: query || undefined,
+    page,
+    limit: PAGE_SIZE,
+    sort: "newest",
+  });
+  const items = data?.data ?? [];
+  const updateProduct = useUpdateProduct();
 
   const submitSearch = () => {
     setQuery(searchRef.current?.value.trim() ?? "");
     setPage(1);
   };
 
-  const toggleActive = async (p: ProductSummary) => {
-    setTogglingId(p.id);
-    try {
-      const updated = await adminUpdateProduct(p.id, { active: !p.active });
-      dispatch({ type: "UPDATE_ITEM", item: { ...p, active: updated.active } });
-      showToast(updated.active ? "Produto ativado." : "Produto desativado.");
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : "Erro ao atualizar produto", "error");
-    } finally {
-      setTogglingId(null);
-    }
+  const toggleActive = (p: ProductSummary) => {
+    updateProduct.mutate(
+      { id: p.id, body: { active: !p.active } },
+      {
+        onSuccess: (updated) => showToast(updated.active ? "Produto ativado." : "Produto desativado."),
+        onError: (e) => showToast(e instanceof Error ? e.message : "Erro ao atualizar produto", "error"),
+      },
+    );
   };
 
-  const total = state.meta?.total ?? 0;
-  const totalPages = state.meta?.total_pages ?? 1;
+  const total = data?.meta.total ?? 0;
+  const totalPages = data?.meta.total_pages ?? 1;
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -175,7 +132,7 @@ export function GerenciarEstoque() {
         </div>
       </div>
 
-      {/* Busca */}
+      {/* search */}
       <div className="mb-4 flex items-center gap-2 rounded-pill border border-line bg-surface-2 px-3 py-2 text-ink-muted focus-within:border-accent/60">
         <Search size={16} className="flex-shrink-0" />
         <input
@@ -191,17 +148,17 @@ export function GerenciarEstoque() {
         </Button>
       </div>
 
-      {state.error && (
+      {error && (
         <div className="mb-4 rounded-[16px] border border-danger/20 bg-danger/5 p-4 text-center text-sm text-danger">
-          {state.error}
+          {error.message}
         </div>
       )}
 
-      {state.loading ? (
+      {isLoading ? (
         <div className="flex min-h-[30vh] items-center justify-center text-ink-muted">
           <Spinner className="h-6 w-6" />
         </div>
-      ) : state.items.length === 0 ? (
+      ) : items.length === 0 ? (
         <EmptyState
           title="Nenhum produto encontrado"
           description="Cadastre um novo produto para começar."
@@ -209,7 +166,7 @@ export function GerenciarEstoque() {
         />
       ) : (
         <div className="space-y-2">
-          {state.items.map((p) => {
+          {items.map((p) => {
             const promoPrice = p.promotional_price;
             const isOnSale = promoPrice != null && promoPrice < p.price;
             const expanded = expandedId === p.id;
@@ -255,7 +212,7 @@ export function GerenciarEstoque() {
                     <Button
                       size="sm"
                       variant={p.active ? "danger" : "outline"}
-                      loading={togglingId === p.id}
+                      loading={updateProduct.isPending && updateProduct.variables?.id === p.id}
                       onClick={() => toggleActive(p)}
                     >
                       {p.active ? "Desativar" : "Ativar"}
@@ -271,7 +228,7 @@ export function GerenciarEstoque() {
             );
           })}
 
-          {/* Paginação */}
+          {/* pagination */}
           {totalPages > 1 && (
             <div className="mt-6 flex items-center justify-center gap-3">
               <Button variant="ghost" disabled={page <= 1} onClick={() => setPage((prev) => prev - 1)}>

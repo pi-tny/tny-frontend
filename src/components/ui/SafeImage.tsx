@@ -4,11 +4,11 @@ import { ImageOff } from "lucide-react";
 import { cn } from "./cn";
 
 type Props = Omit<ImgHTMLAttributes<HTMLImageElement>, "onError"> & {
-  /** Classe aplicada tanto à imagem quanto ao placeholder (mesmo tamanho). */
+  /** class applied to both the image and the placeholder (same size). */
   className?: string;
 };
 
-/** Imagem com fallback: se a URL falhar ou estiver vazia, mostra um placeholder. */
+/** image with fallback: shows a placeholder if the url fails or is empty. */
 export function SafeImage({ src, alt = "", className, ...props }: Props) {
   const [failed, setFailed] = useState(false);
   const missing = !src || failed;

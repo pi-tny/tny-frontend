@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useMemo, useState, useEffect, type ReactNode } from "react";
+import { createContext, useCallback, useMemo, type ReactNode } from "react";
+import { useLocalStorage } from "../hooks/useLocalStorage";
 import type { CartItem, Produto } from "../types";
 
 export type CarrinhoContextValue = {
@@ -16,59 +17,61 @@ export type CarrinhoContextValue = {
 export const CarrinhoContext = createContext<CarrinhoContextValue | undefined>(undefined);
 
 export function CarrinhoProvider({ children }: { children: ReactNode }) {
-  const [cart, setCart] = useState<CartItem[]>(() => {
-    const saved = localStorage.getItem("tny_carrinho");
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [cart, setCart] = useLocalStorage<CartItem[]>("tny_carrinho", []);
 
-  useEffect(() => {
-    localStorage.setItem("tny_carrinho", JSON.stringify(cart));
-  }, [cart]);
+  const addToCart = useCallback(
+    (product: Produto, color = "Padrão", size = "Único", variantId?: number) => {
+      const newItem: CartItem = {
+        id: product.id,
+        name: product.name,
+        price: product.promotional_price ?? product.price,
+        image: product.image,
+        color,
+        size,
+        quantity: 1,
+        variantId,
+      };
 
-  const addToCart = (product: Produto, color = "Padrão", size = "Único", variantId?: number) => {
-    const newItem: CartItem = {
-      id: product.id,
-      name: product.name,
-      price: product.promotional_price ?? product.price,
-      image: product.image,
-      color,
-      size,
-      quantity: 1,
-      variantId,
-    };
-
-    setCart((prev) => {
-      const existing = prev.find(
-        (item) => item.id === newItem.id && item.color === newItem.color && item.size === newItem.size,
-      );
-      if (existing) {
-        return prev.map((item) =>
-          item.id === newItem.id && item.color === newItem.color && item.size === newItem.size
-            ? { ...item, quantity: item.quantity + 1 }
-            : item,
+      setCart((prev) => {
+        const existing = prev.find(
+          (item) => item.id === newItem.id && item.color === newItem.color && item.size === newItem.size,
         );
-      }
-      return [...prev, newItem];
-    });
-  };
+        if (existing) {
+          return prev.map((item) =>
+            item.id === newItem.id && item.color === newItem.color && item.size === newItem.size
+              ? { ...item, quantity: item.quantity + 1 }
+              : item,
+          );
+        }
+        return [...prev, newItem];
+      });
+    },
+    [setCart],
+  );
 
-  const removeFromCart = (id: number, color: string, size: string) => {
-    setCart((prev) => prev.filter((item) => !(item.id === id && item.color === color && item.size === size)));
-  };
+  const removeFromCart = useCallback(
+    (id: number, color: string, size: string) => {
+      setCart((prev) => prev.filter((item) => !(item.id === id && item.color === color && item.size === size)));
+    },
+    [setCart],
+  );
 
-  const updateQuantity = (id: number, color: string, size: string, delta: number) => {
-    setCart((prev) =>
-      prev
-        .map((item) =>
-          item.id === id && item.color === color && item.size === size
-            ? { ...item, quantity: Math.max(0, item.quantity + delta) }
-            : item,
-        )
-        .filter((item) => item.quantity > 0),
-    );
-  };
+  const updateQuantity = useCallback(
+    (id: number, color: string, size: string, delta: number) => {
+      setCart((prev) =>
+        prev
+          .map((item) =>
+            item.id === id && item.color === color && item.size === size
+              ? { ...item, quantity: Math.max(0, item.quantity + delta) }
+              : item,
+          )
+          .filter((item) => item.quantity > 0),
+      );
+    },
+    [setCart],
+  );
 
-  const clearCart = () => setCart([]);
+  const clearCart = useCallback(() => setCart([]), [setCart]);
 
   const totalItems = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
@@ -95,7 +98,7 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({ cart, addToCart, removeFromCart, updateQuantity, clearCart, totalItems, subtotal, gerarMensagemWhatsApp }),
-    [cart, subtotal, totalItems, gerarMensagemWhatsApp],
+    [cart, subtotal, totalItems, gerarMensagemWhatsApp, addToCart, removeFromCart, updateQuantity, clearCart],
   );
 
   return <CarrinhoContext.Provider value={value}>{children}</CarrinhoContext.Provider>;

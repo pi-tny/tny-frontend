@@ -35,7 +35,7 @@ export function AppRoutes() {
       <Route path="/institucional" element={<Institucional />} />
       <Route path="/revendedor" element={<Revendedor />} />
 
-      {/* Admin */}
+      {/* admin */}
       <Route path="/admin/login" element={<LoginAdmin />} />
       <Route
         path="/admin/dashboard"

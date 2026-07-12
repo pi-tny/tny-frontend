@@ -1,33 +1,14 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Search, Trash2 } from "lucide-react";
-import { adminDeleteLead, adminListLeads } from "../../services/api";
-import type { Lead, PaginationMeta } from "../../types";
+import { useAdminLeads } from "../../hooks/queries";
+import { useDeleteLead } from "../../hooks/mutations";
+import type { Lead } from "../../types";
 import { useToast } from "../../context/useToast";
 import { Badge, Button, EmptyState, Spinner } from "../../components/ui";
 import { formatDateTime } from "../../lib/orders";
 
 const PAGE_SIZE = 20;
-
-type State = { items: Lead[]; meta: PaginationMeta | null; loading: boolean; error: string | null };
-type Action =
-  | { type: "FETCH" }
-  | { type: "SUCCESS"; items: Lead[]; meta: PaginationMeta }
-  | { type: "ERROR"; error: string }
-  | { type: "REMOVE"; id: number };
-
-function reducer(s: State, a: Action): State {
-  switch (a.type) {
-    case "FETCH":
-      return { ...s, loading: true, error: null };
-    case "SUCCESS":
-      return { items: a.items, meta: a.meta, loading: false, error: null };
-    case "ERROR":
-      return { ...s, loading: false, error: a.error };
-    case "REMOVE":
-      return { ...s, items: s.items.filter((l) => l.id !== a.id) };
-  }
-}
 
 export function Leads() {
   const navigate = useNavigate();
@@ -36,33 +17,26 @@ export function Leads() {
 
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
-  const [state, dispatch] = useReducer(reducer, { items: [], meta: null, loading: true, error: null });
 
-  useEffect(() => {
-    dispatch({ type: "FETCH" });
-    adminListLeads({ q: query || undefined, page, limit: PAGE_SIZE })
-      .then((res) => dispatch({ type: "SUCCESS", items: res.data, meta: res.meta }))
-      .catch((err: Error) => dispatch({ type: "ERROR", error: err.message }));
-  }, [query, page]);
+  const { data, isLoading, error } = useAdminLeads(query, page, PAGE_SIZE);
+  const items = data?.data ?? [];
+  const deleteLead = useDeleteLead();
 
   const submitSearch = () => {
     setQuery(searchRef.current?.value.trim() ?? "");
     setPage(1);
   };
 
-  const handleDelete = async (lead: Lead) => {
+  const handleDelete = (lead: Lead) => {
     if (!confirm(`Excluir o lead "${lead.name}"? (LGPD)`)) return;
-    try {
-      await adminDeleteLead(lead.id);
-      dispatch({ type: "REMOVE", id: lead.id });
-      showToast("Lead excluído.");
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Erro ao excluir lead", "error");
-    }
+    deleteLead.mutate(lead.id, {
+      onSuccess: () => showToast("Lead excluído."),
+      onError: (err) => showToast(err instanceof Error ? err.message : "Erro ao excluir lead", "error"),
+    });
   };
 
-  const total = state.meta?.total ?? 0;
-  const totalPages = state.meta?.total_pages ?? 1;
+  const total = data?.meta.total ?? 0;
+  const totalPages = data?.meta.total_pages ?? 1;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -91,19 +65,19 @@ export function Leads() {
         </Button>
       </div>
 
-      {state.error && (
-        <div className="mb-4 rounded-[16px] border border-danger/20 bg-danger/5 p-4 text-center text-sm text-danger">{state.error}</div>
+      {error && (
+        <div className="mb-4 rounded-[16px] border border-danger/20 bg-danger/5 p-4 text-center text-sm text-danger">{error.message}</div>
       )}
 
-      {state.loading ? (
+      {isLoading ? (
         <div className="flex min-h-[30vh] items-center justify-center text-ink-muted">
           <Spinner className="h-6 w-6" />
         </div>
-      ) : state.items.length === 0 ? (
+      ) : items.length === 0 ? (
         <EmptyState title="Nenhum lead encontrado" description="Cadastros da newsletter e do formulário de revendedor aparecem aqui." />
       ) : (
         <div className="space-y-2">
-          {state.items.map((lead) => (
+          {items.map((lead) => (
             <div key={lead.id} className="flex items-center gap-3 rounded-card border border-line bg-surface-2 p-4">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">

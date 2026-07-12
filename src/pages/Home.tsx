@@ -1,7 +1,6 @@
-import { useReducer, useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { getProducts, getCategories } from "../services/api";
-import type { ProductSummary, Category, PaginationMeta } from "../types";
+import { useProducts, useCategories } from "../hooks/queries";
 import { CardProduto } from "../components/CardProduto";
 import { SkeletonCard } from "../components/SkeletonCard";
 import { EmptyState } from "../components/ui";
@@ -19,65 +18,27 @@ const FALLBACK_IMAGE =
 
 const PAGE_SIZE = 8;
 
-type PState = {
-  products: ProductSummary[];
-  meta: PaginationMeta | null;
-  loading: boolean;
-  error: string | null;
-};
-type PAction =
-  | { type: "FETCH" }
-  | { type: "SUCCESS"; products: ProductSummary[]; meta: PaginationMeta }
-  | { type: "ERROR"; error: string };
-
-function productsReducer(s: PState, a: PAction): PState {
-  switch (a.type) {
-    case "FETCH":
-      return { ...s, loading: true, error: null };
-    case "SUCCESS":
-      return { loading: false, error: null, products: a.products, meta: a.meta };
-    case "ERROR":
-      return { ...s, loading: false, error: a.error };
-  }
-}
-
 export function Home() {
   const [searchParams] = useSearchParams();
   const searchTerm = searchParams.get("q") ?? undefined;
 
-  const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
 
-  const [state, dispatch] = useReducer(productsReducer, {
-    products: [],
-    meta: null,
-    loading: true,
-    error: null,
+  const categories = useCategories().data?.data ?? [];
+  const productsQuery = useProducts({
+    q: searchTerm,
+    category_id: selectedCategoryId ?? undefined,
+    limit: PAGE_SIZE,
+    sort: "newest",
   });
-
-  useEffect(() => {
-    getCategories()
-      .then((res) => setCategories(res.data))
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    dispatch({ type: "FETCH" });
-    getProducts({
-      q: searchTerm,
-      category_id: selectedCategoryId ?? undefined,
-      limit: PAGE_SIZE,
-      sort: "newest",
-    })
-      .then((res) => dispatch({ type: "SUCCESS", products: res.data, meta: res.meta }))
-      .catch((err: Error) => dispatch({ type: "ERROR", error: err.message }));
-  }, [searchTerm, selectedCategoryId]);
+  const products = productsQuery.data?.data ?? [];
+  const meta = productsQuery.data?.meta ?? null;
 
   const handleCategoryClick = (id: number | null) => {
     setSelectedCategoryId(id);
   };
 
-  // Leva o contexto atual (busca/categoria) para a listagem completa.
+  // carries the current context (search/category) to the full listing.
   const verTodosParams = new URLSearchParams();
   if (searchTerm) verTodosParams.set("q", searchTerm);
   if (selectedCategoryId) verTodosParams.set("categoria", String(selectedCategoryId));
@@ -86,7 +47,7 @@ export function Home() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-8">
 
-        {/* ─── Banner ─── */}
+        {/* banner */}
         <section>
           <div className="relative overflow-hidden rounded-[28px] border border-line bg-surface-2 shadow-2xl">
             <img
@@ -118,15 +79,15 @@ export function Home() {
           </div>
         </section>
 
-        {/* ─── Categorias (sempre scroll horizontal) ─── */}
+        {/* categories (always horizontal scroll) */}
         <section>
           <h2 className="mb-3 text-base font-semibold text-ink sm:text-lg">Categorias</h2>
           <div className="relative">
-            {/* Fade nos bordas para indicar scroll */}
+            {/* edge fade to hint scrolling */}
             <div className="pointer-events-none absolute right-0 top-0 z-10 h-full w-10 bg-gradient-to-l from-bg to-transparent" />
             <div className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
 
-              {/* "Todos" */}
+              {/* "all" */}
               <button
                 type="button"
                 onClick={() => handleCategoryClick(null)}
@@ -167,29 +128,29 @@ export function Home() {
           </div>
         </section>
 
-        {/* ─── Produtos ─── */}
+        {/* products */}
         <section>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-base font-semibold text-ink sm:text-lg">
               {searchTerm ? `Resultados para "${searchTerm}"` : "Novidades"}
             </h2>
-            {state.meta && (
+            {meta && (
               <span className="text-xs text-ink-subtle sm:text-sm">
-                {state.meta.total} produto{state.meta.total !== 1 ? "s" : ""}
+                {meta.total} produto{meta.total !== 1 ? "s" : ""}
               </span>
             )}
           </div>
 
-          {state.error && (
+          {productsQuery.error && (
             <div className="mb-4 rounded-[16px] border border-danger/20 bg-danger/5 p-4 text-center text-sm text-danger">
-              {state.error}
+              {productsQuery.error.message}
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {state.loading
+            {productsQuery.isLoading
               ? Array.from({ length: PAGE_SIZE }).map((_, i) => <SkeletonCard key={i} />)
-              : state.products.map((p) => (
+              : products.map((p) => (
                   <CardProduto
                     key={p.id}
                     id={p.id}
@@ -201,15 +162,15 @@ export function Home() {
                 ))}
           </div>
 
-          {!state.loading && state.products.length === 0 && !state.error && (
+          {!productsQuery.isLoading && products.length === 0 && !productsQuery.error && (
             <EmptyState
               title="Nenhum produto encontrado"
               description="Tente outro filtro ou termo de busca."
             />
           )}
 
-          {/* Acesso à listagem completa com filtros e paginação */}
-          {!state.loading && state.products.length > 0 && (
+          {/* link to the full listing with filters and pagination */}
+          {!productsQuery.isLoading && products.length > 0 && (
             <div className="mt-8 flex justify-center">
               <Link
                 to={verTodosHref}

@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, MessageCircle } from "lucide-react";
-import { adminGetOrder, adminUpdateOrderStatus } from "../../services/api";
-import type { OrderDetail, OrderStatus } from "../../types";
+import { useAdminOrder } from "../../hooks/queries";
+import { useUpdateOrderStatus } from "../../hooks/mutations";
+import type { OrderStatus } from "../../types";
 import { useToast } from "../../context/useToast";
 import { Badge, Button, Spinner, cn } from "../../components/ui";
 import {
@@ -29,37 +29,20 @@ export function PedidoDetalhe() {
   const orderId = Number(id);
   const { showToast } = useToast();
 
-  const [order, setOrder] = useState<OrderDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [updating, setUpdating] = useState<OrderStatus | null>(null);
+  const { data: order, isLoading, error } = useAdminOrder(orderId);
+  const updateStatus = useUpdateOrderStatus();
 
-  useEffect(() => {
-    adminGetOrder(orderId)
-      .then((o) => {
-        setOrder(o);
-        setLoading(false);
-      })
-      .catch((e: Error) => {
-        setError(e.message);
-        setLoading(false);
-      });
-  }, [orderId]);
-
-  const changeStatus = async (status: OrderStatus) => {
-    setUpdating(status);
-    try {
-      const updated = await adminUpdateOrderStatus(orderId, status);
-      setOrder(updated);
-      showToast(`Pedido marcado como "${ORDER_STATUS_LABEL[status]}".`);
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : "Erro ao atualizar status", "error");
-    } finally {
-      setUpdating(null);
-    }
+  const changeStatus = (status: OrderStatus) => {
+    updateStatus.mutate(
+      { id: orderId, status },
+      {
+        onSuccess: () => showToast(`Pedido marcado como "${ORDER_STATUS_LABEL[status]}".`),
+        onError: (e) => showToast(e instanceof Error ? e.message : "Erro ao atualizar status", "error"),
+      },
+    );
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center text-ink-muted">
         <Spinner className="h-6 w-6" />
@@ -74,7 +57,7 @@ export function PedidoDetalhe() {
           ← Voltar aos pedidos
         </Link>
         <div className="rounded-card border border-danger/20 bg-danger/5 p-8 text-center text-danger">
-          {error ?? "Pedido não encontrado"}
+          {error?.message ?? "Pedido não encontrado"}
         </div>
       </div>
     );
@@ -96,7 +79,7 @@ export function PedidoDetalhe() {
         <p className="text-sm text-ink-subtle">{formatDateTime(order.created_at)}</p>
       </div>
 
-      {/* Alterar status */}
+      {/* change status */}
       <section className="mb-4 rounded-card border border-line bg-surface-2 p-5">
         <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-ink-muted">Status</p>
         <div className="flex flex-wrap gap-2">
@@ -107,7 +90,7 @@ export function PedidoDetalhe() {
                 key={s}
                 variant={isCurrent ? "primary" : "outline"}
                 size="sm"
-                loading={updating === s}
+                loading={updateStatus.isPending && updateStatus.variables?.status === s}
                 disabled={isCurrent}
                 onClick={() => changeStatus(s)}
               >
@@ -119,7 +102,7 @@ export function PedidoDetalhe() {
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Cliente */}
+        {/* customer */}
         <section className="space-y-3 rounded-card border border-line bg-surface-2 p-5">
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-ink-muted">Cliente</h2>
           <InfoRow label="Nome" value={order.name} />
@@ -138,7 +121,7 @@ export function PedidoDetalhe() {
           </a>
         </section>
 
-        {/* Itens */}
+        {/* items */}
         <section className="space-y-3 rounded-card border border-line bg-surface-2 p-5">
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-ink-muted">Itens</h2>
           <div className="space-y-2">

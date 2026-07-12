@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { ShoppingBag } from "lucide-react";
 import { getProductById } from "../services/api";
+import { keys } from "../hooks/queries";
 import { useCarrinho } from "../context/useCarrinho";
 import { useToast } from "../context/useToast";
 import { Badge, SafeImage, Spinner } from "./ui";
@@ -21,6 +23,7 @@ function formatBRL(value: number): string {
 
 export function CardProduto({ id, name, image, price, promotional_price, badge }: CardProdutoProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { addToCart } = useCarrinho();
   const { showToast } = useToast();
   const [adding, setAdding] = useState(false);
@@ -28,13 +31,17 @@ export function CardProduto({ id, name, image, price, promotional_price, badge }
   const isOnSale = !!promotional_price && promotional_price < price;
   const displayBadge = badge ?? (isOnSale ? "Promoção" : undefined);
 
-  // Adiciona a variante da capa (1ª com estoque) sem sair da vitrine.
+  // adds the cover variant (first one in stock) without leaving the listing.
   const handleQuickAdd = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (adding) return;
     setAdding(true);
     try {
-      const detail = await getProductById(id);
+      // reuse the product detail cache shared with the product page.
+      const detail = await queryClient.fetchQuery({
+        queryKey: keys.product(id),
+        queryFn: () => getProductById(id),
+      });
       const variant = detail.variants.find((v) => v.quantity > 0) ?? detail.variants[0];
       if (!variant) {
         showToast("Selecione as opções na página do produto.", "error");
@@ -64,7 +71,7 @@ export function CardProduto({ id, name, image, price, promotional_price, badge }
       onClick={() => navigate(`/produto/${id}`)}
       className="group cursor-pointer overflow-hidden rounded-card border border-line bg-surface-2 transition-all duration-200 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_8px_32px_rgba(0,0,0,0.6)]"
     >
-      {/* Imagem com aspecto 3:4 (portrait) */}
+      {/* 3:4 portrait image */}
       <div className="relative overflow-hidden">
         <div className="aspect-[3/4]">
           <SafeImage
@@ -81,7 +88,7 @@ export function CardProduto({ id, name, image, price, promotional_price, badge }
         )}
       </div>
 
-      {/* Conteúdo */}
+      {/* content */}
       <div className="p-4">
         <p className="line-clamp-2 text-sm font-medium leading-snug text-ink">{name}</p>
         <div className="mt-2 flex items-baseline gap-2 tabular-nums">

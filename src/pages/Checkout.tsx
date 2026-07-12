@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCarrinho } from "../context/useCarrinho";
 import { useToast } from "../context/useToast";
-import { createOrder } from "../services/api";
+import { useCreateOrder } from "../hooks/mutations";
+import { checkoutSchema, validateForm } from "../lib/validation";
 import { Button, Field, Input, SafeImage } from "../components/ui";
 
 const PAYMENT_OPTIONS = [
@@ -27,17 +28,17 @@ export function Checkout() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("to_be_defined");
-  const [loading, setLoading] = useState(false);
+  const createOrder = useCreateOrder();
 
   const allHaveVariantId = cart.every((item) => item.variantId !== undefined);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) return;
-    setLoading(true);
+    if (!validateForm(checkoutSchema, { name, phone }, (m) => showToast(m, "error"))) return;
     try {
       if (allHaveVariantId) {
-        const order = await createOrder({
+        const order = await createOrder.mutateAsync({
           name,
           phone,
           email: email || undefined,
@@ -55,8 +56,6 @@ export function Checkout() {
       }
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : "Erro ao finalizar pedido", "error");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -76,7 +75,7 @@ export function Checkout() {
 
         <form onSubmit={handleSubmit}>
           <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2">
-            {/* ─── Resumo dos itens ─── */}
+            {/* order summary */}
             <div className="rounded-[24px] border border-line bg-surface-2 p-5">
               <h3 className="mb-4 text-sm font-semibold text-ink-muted">Produtos selecionados</h3>
               <div className="space-y-3">
@@ -121,7 +120,7 @@ export function Checkout() {
               </div>
             </div>
 
-            {/* ─── Formulário ─── */}
+            {/* customer form */}
             <div className="rounded-[24px] border border-line bg-surface-2 p-5">
               <h3 className="mb-4 text-sm font-semibold text-ink-muted">Seus dados</h3>
               <div className="space-y-4">
@@ -171,8 +170,8 @@ export function Checkout() {
                     ))}
                   </select>
                 </Field>
-                <Button type="submit" size="lg" loading={loading} disabled={cart.length === 0} className="mt-1 w-full">
-                  {loading ? "Enviando" : "Finalizar via WhatsApp"}
+                <Button type="submit" size="lg" loading={createOrder.isPending} disabled={cart.length === 0} className="mt-1 w-full">
+                  {createOrder.isPending ? "Enviando" : "Finalizar via WhatsApp"}
                 </Button>
               </div>
             </div>

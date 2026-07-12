@@ -17,7 +17,7 @@ export function LoginAdmin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Já autenticado: não mostra o login novamente.
+  // already authenticated: don't show the login again.
   if (status === "authenticated") {
     return <Navigate to={from} replace />;
   }

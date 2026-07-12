@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle } from "lucide-react";
-import { subscribeLead } from "../services/api";
+import { useSubscribeLead } from "../hooks/mutations";
 import { useToast } from "../context/useToast";
 import { Button, Field, Input } from "../components/ui";
 
@@ -13,20 +13,17 @@ export function Revendedor() {
   const [cidade, setCidade] = useState("");
   const [parceria, setParceria] = useState("Loja física");
   const [mensagem, setMensagem] = useState("");
-  const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const subscribeLead = useSubscribeLead();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     try {
-      await subscribeLead({ name: nome, email, phone: whatsapp, marketing_consent: true });
+      await subscribeLead.mutateAsync({ name: nome, email, phone: whatsapp, marketing_consent: true });
       setSuccess(true);
       showToast("Solicitação enviada com sucesso!");
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : "Erro ao enviar solicitação", "error");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -98,8 +95,8 @@ export function Revendedor() {
                 />
               </Field>
 
-              <Button type="submit" size="lg" loading={loading} className="w-full">
-                {loading ? "Enviando" : "Enviar solicitação"}
+              <Button type="submit" size="lg" loading={subscribeLead.isPending} className="w-full">
+                {subscribeLead.isPending ? "Enviando" : "Enviar solicitação"}
               </Button>
             </form>
           )}

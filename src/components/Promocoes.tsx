@@ -1,45 +1,16 @@
-import { useReducer, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { getProducts } from "../services/api";
-import type { ProductSummary, PaginationMeta } from "../types";
+import { useProducts } from "../hooks/queries";
 import { CardProduto } from "./CardProduto";
 import { SkeletonCard } from "./SkeletonCard";
 import { EmptyState } from "./ui";
 
-type PState = {
-  products: ProductSummary[];
-  meta: PaginationMeta | null;
-  loading: boolean;
-};
-type PAction =
-  | { type: "FETCH" }
-  | { type: "SUCCESS"; products: ProductSummary[]; meta: PaginationMeta }
-  | { type: "ERROR" };
-
-function reducer(s: PState, a: PAction): PState {
-  switch (a.type) {
-    case "FETCH":
-      return { ...s, loading: true };
-    case "SUCCESS":
-      return { products: a.products, meta: a.meta, loading: false };
-    case "ERROR":
-      return { ...s, loading: false };
-  }
-}
-
 export function Promocoes() {
-  const [state, dispatch] = useReducer(reducer, { products: [], meta: null, loading: true });
-
-  useEffect(() => {
-    dispatch({ type: "FETCH" });
-    getProducts({ on_sale: true, limit: 20, sort: "newest" })
-      .then((res) => dispatch({ type: "SUCCESS", products: res.data, meta: res.meta }))
-      .catch(() => dispatch({ type: "ERROR" }));
-  }, []);
+  const { data, isLoading } = useProducts({ on_sale: true, limit: 20, sort: "newest" });
+  const products = data?.data ?? [];
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-8">
-      {/* Banner */}
+      {/* banner */}
       <section className="overflow-hidden rounded-[28px] border border-line bg-surface-2 shadow-xl">
         <img
           src="https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?auto=format&fit=crop&w=1400&q=80"
@@ -53,19 +24,19 @@ export function Promocoes() {
         </div>
       </section>
 
-      {/* Grid */}
+      {/* grid */}
       <section>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold sm:text-lg">Produtos em oferta</h2>
           <span className="text-xs text-ink-muted sm:text-sm">
-            {state.loading ? "…" : `${state.products.length} produto${state.products.length !== 1 ? "s" : ""}`}
+            {isLoading ? "…" : `${products.length} produto${products.length !== 1 ? "s" : ""}`}
           </span>
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {state.loading
+          {isLoading
             ? Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)
-            : state.products.map((p) => (
+            : products.map((p) => (
                 <CardProduto
                   key={p.id}
                   id={p.id}
@@ -78,7 +49,7 @@ export function Promocoes() {
               ))}
         </div>
 
-        {!state.loading && state.products.length === 0 && (
+        {!isLoading && products.length === 0 && (
           <EmptyState
             title="Nenhuma promoção no momento"
             description="Volte em breve para conferir nossas ofertas."
@@ -93,8 +64,8 @@ export function Promocoes() {
           />
         )}
 
-        {/* Leva à listagem completa já filtrada por promoções */}
-        {!state.loading && state.products.length > 0 && (
+        {/* jumps to the full listing already filtered by sale items */}
+        {!isLoading && products.length > 0 && (
           <div className="mt-8 flex justify-center">
             <Link
               to="/produtos?promo=1"
@@ -106,7 +77,7 @@ export function Promocoes() {
         )}
       </section>
 
-      {/* Contato */}
+      {/* contact */}
       <div className="rounded-card border border-line bg-surface-2 p-5 text-sm text-ink-muted sm:p-6">
         <p className="font-semibold uppercase tracking-[0.3em] text-ink">Contato TNY</p>
         <p className="mt-2">WhatsApp: (85) 98102-5616</p>

@@ -64,7 +64,7 @@ export function Header() {
     <header className="sticky top-0 z-40 border-b border-line bg-surface/95 px-4 py-3 backdrop-blur-md sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
 
-        {/* ─── Desktop: linha única ─── */}
+        {/* desktop: single row */}
         <div className="hidden items-center gap-6 lg:flex">
           <Link to="/" className="flex-shrink-0">
             <img src={logoTNY} alt="TNY" className="h-8 w-auto object-contain" />
@@ -94,7 +94,7 @@ export function Header() {
           <CartButton totalItems={totalItems} />
         </div>
 
-        {/* ─── Mobile/Tablet: 3 linhas compactas ─── */}
+        {/* mobile/tablet: three compact rows */}
         <div className="flex flex-col gap-2 lg:hidden">
           <div className="flex items-center justify-between">
             <Link to="/">

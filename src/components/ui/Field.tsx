@@ -5,14 +5,14 @@ import { cn } from "./cn";
 const inputBase =
   "w-full rounded-pill border border-line bg-elevated px-4 py-3 text-sm text-ink outline-none transition-colors duration-200 placeholder:text-ink-subtle focus:border-accent/60";
 
-/** Input estilizado com os tokens do design system. */
+/** input styled with the design system tokens. */
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...props }, ref) {
     return <input ref={ref} className={cn(inputBase, className)} {...props} />;
   },
 );
 
-/** Campo com label visível + input, seguindo as diretrizes de acessibilidade. */
+/** field with a visible label + input, following accessibility guidelines. */
 export function Field({
   label,
   htmlFor,

@@ -1,3 +1,4 @@
+import axios, { AxiosError } from "axios";
 import type {
   AdminImageCreate,
   AdminProductCreate,
@@ -24,8 +25,7 @@ import type {
 
 const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3000";
 
-// ─── Token (admin) ────────────────────────────────────────────────────────────
-
+// admin token
 const TOKEN_KEY = "tny_admin_token";
 
 export function getToken(): string | null {
@@ -38,37 +38,38 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-interface RequestOptions extends RequestInit {
-  /** Injeta o Bearer token e limpa a sessão em caso de 401. */
-  auth?: boolean;
-}
+const api = axios.create({
+  baseURL: BASE_URL,
+  // keep the old query behavior: skip params that are empty or false
+  paramsSerializer: (params: Record<string, unknown>) => {
+    const search = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null && value !== "" && value !== false) {
+        search.set(key, String(value));
+      }
+    }
+    return search.toString();
+  },
+});
 
-async function request<T>(path: string, options?: RequestOptions): Promise<T> {
-  const { auth, headers, ...rest } = options ?? {};
+// attach the bearer token to every request when we have one
+api.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
-  const authHeaders: Record<string, string> = {};
-  if (auth) {
-    const token = getToken();
-    if (token) authHeaders.Authorization = `Bearer ${token}`;
-  }
+// drop the local session on 401 and surface the server's error message
+api.interceptors.response.use(
+  (res) => res,
+  (error: AxiosError<{ error?: { message?: string } }>) => {
+    if (error.response?.status === 401) clearToken();
+    const message = error.response?.data?.error?.message ?? "Erro ao conectar com o servidor";
+    return Promise.reject(new Error(message));
+  },
+);
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...authHeaders, ...headers },
-    ...rest,
-  });
-
-  // Token inválido/expirado: encerra a sessão local.
-  if (auth && res.status === 401) clearToken();
-
-  // Suporta respostas sem corpo (204 No Content).
-  const text = await res.text();
-  const json = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new Error(json?.error?.message ?? "Erro ao conectar com o servidor");
-  return json as T;
-}
-
-// ─── Products ───────────────────────────────────────────────────────────────
-
+// products
 export interface ProductFilters {
   q?: string;
   category_id?: number;
@@ -79,50 +80,38 @@ export interface ProductFilters {
   limit?: number;
 }
 
-function buildQuery(params?: Record<string, string | number | boolean | undefined>): string {
-  if (!params) return "";
-  const q = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== "" && value !== false) q.set(key, String(value));
-  }
-  const str = q.toString();
-  return str ? `?${str}` : "";
-}
-
 export async function getProducts(
   filters?: ProductFilters,
 ): Promise<{ data: ProductSummary[]; meta: PaginationMeta }> {
-  return request(`/products${buildQuery(filters as Record<string, string | number | boolean | undefined>)}`);
+  const { data } = await api.get("/products", { params: filters });
+  return data;
 }
 
 export async function getProductById(id: number): Promise<ProductDetail> {
-  const res = await request<{ data: ProductDetail }>(`/products/${id}`);
-  return res.data;
+  const { data } = await api.get<{ data: ProductDetail }>(`/products/${id}`);
+  return data.data;
 }
 
 export async function getRelatedProducts(id: number, limit = 4): Promise<ProductSummary[]> {
-  const res = await request<{ data: ProductSummary[] }>(`/products/${id}/related?limit=${limit}`);
-  return res.data;
-}
-
-// ─── Categories ─────────────────────────────────────────────────────────────
-
-export async function getCategories(): Promise<{ data: Category[]; meta: PaginationMeta }> {
-  return request("/categories?limit=50");
-}
-
-// ─── Orders ─────────────────────────────────────────────────────────────────
-
-export async function createOrder(body: CreateOrderBody): Promise<OrderResponse> {
-  const res = await request<{ data: OrderResponse }>("/orders", {
-    method: "POST",
-    body: JSON.stringify(body),
+  const { data } = await api.get<{ data: ProductSummary[] }>(`/products/${id}/related`, {
+    params: { limit },
   });
-  return res.data;
+  return data.data;
 }
 
-// ─── Leads ──────────────────────────────────────────────────────────────────
+// categories
+export async function getCategories(): Promise<{ data: Category[]; meta: PaginationMeta }> {
+  const { data } = await api.get("/categories", { params: { limit: 50 } });
+  return data;
+}
 
+// orders
+export async function createOrder(body: CreateOrderBody): Promise<OrderResponse> {
+  const { data } = await api.post<{ data: OrderResponse }>("/orders", body);
+  return data.data;
+}
+
+// leads
 export interface LeadBody {
   name: string;
   email: string;
@@ -131,14 +120,10 @@ export interface LeadBody {
 }
 
 export async function subscribeLead(body: LeadBody): Promise<void> {
-  await request("/leads", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  await api.post("/leads", body);
 }
 
-// ─── Admin Auth ──────────────────────────────────────────────────────────────
-
+// admin auth
 export interface AdminProfile {
   id: number;
   name: string;
@@ -148,24 +133,20 @@ export interface AdminProfile {
 }
 
 export async function adminLogin(email: string, password: string): Promise<string> {
-  const res = await request<{ data: { token: string } }>("/admin/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
-  return res.data.token;
+  const { data } = await api.post<{ data: { token: string } }>("/admin/auth/login", { email, password });
+  return data.data.token;
 }
 
 export async function adminMe(): Promise<AdminProfile> {
-  const res = await request<{ data: AdminProfile }>("/admin/auth/me", { auth: true });
-  return res.data;
+  const { data } = await api.get<{ data: AdminProfile }>("/admin/auth/me");
+  return data.data;
 }
 
 export async function adminLogout(): Promise<void> {
-  await request("/admin/auth/logout", { method: "POST", auth: true });
+  await api.post("/admin/auth/logout");
 }
 
-// ─── Admin: Products ──────────────────────────────────────────────────────────
-
+// admin: products
 export interface AdminProductFilters extends ProductFilters {
   active?: boolean;
 }
@@ -173,101 +154,70 @@ export interface AdminProductFilters extends ProductFilters {
 export async function adminListProducts(
   filters?: AdminProductFilters,
 ): Promise<{ data: ProductSummary[]; meta: PaginationMeta }> {
-  return request(
-    `/admin/products${buildQuery(filters as Record<string, string | number | boolean | undefined>)}`,
-    { auth: true },
-  );
+  const { data } = await api.get("/admin/products", { params: filters });
+  return data;
 }
 
 export async function adminGetProduct(id: number): Promise<ProductDetail> {
-  const res = await request<{ data: ProductDetail }>(`/admin/products/${id}`, { auth: true });
-  return res.data;
+  const { data } = await api.get<{ data: ProductDetail }>(`/admin/products/${id}`);
+  return data.data;
 }
 
 export async function adminCreateProduct(body: AdminProductCreate): Promise<ProductDetail> {
-  const res = await request<{ data: ProductDetail }>("/admin/products", {
-    method: "POST",
-    auth: true,
-    body: JSON.stringify(body),
-  });
-  return res.data;
+  const { data } = await api.post<{ data: ProductDetail }>("/admin/products", body);
+  return data.data;
 }
 
 export async function adminUpdateProduct(id: number, body: AdminProductUpdate): Promise<ProductDetail> {
-  const res = await request<{ data: ProductDetail }>(`/admin/products/${id}`, {
-    method: "PUT",
-    auth: true,
-    body: JSON.stringify(body),
-  });
-  return res.data;
+  const { data } = await api.put<{ data: ProductDetail }>(`/admin/products/${id}`, body);
+  return data.data;
 }
 
 export async function adminDeleteProduct(id: number): Promise<void> {
-  await request(`/admin/products/${id}`, { method: "DELETE", auth: true });
+  await api.delete(`/admin/products/${id}`);
 }
 
 export async function adminSetProductCategories(id: number, categoryIds: number[]): Promise<Category[]> {
-  const res = await request<{ data: Category[] }>(`/admin/products/${id}/categories`, {
-    method: "PUT",
-    auth: true,
-    body: JSON.stringify({ category_ids: categoryIds }),
+  const { data } = await api.put<{ data: Category[] }>(`/admin/products/${id}/categories`, {
+    category_ids: categoryIds,
   });
-  return res.data;
+  return data.data;
 }
 
-// ─── Admin: Variants ──────────────────────────────────────────────────────────
-
+// admin: variants
 export async function adminCreateVariant(productId: number, body: AdminVariantCreate): Promise<ApiVariant> {
-  const res = await request<{ data: ApiVariant }>(`/admin/products/${productId}/variants`, {
-    method: "POST",
-    auth: true,
-    body: JSON.stringify(body),
-  });
-  return res.data;
+  const { data } = await api.post<{ data: ApiVariant }>(`/admin/products/${productId}/variants`, body);
+  return data.data;
 }
 
 export async function adminUpdateVariant(variantId: number, body: AdminVariantUpdate): Promise<ApiVariant> {
-  const res = await request<{ data: ApiVariant }>(`/admin/variants/${variantId}`, {
-    method: "PUT",
-    auth: true,
-    body: JSON.stringify(body),
-  });
-  return res.data;
+  const { data } = await api.put<{ data: ApiVariant }>(`/admin/variants/${variantId}`, body);
+  return data.data;
 }
 
 export async function adminDeleteVariant(variantId: number): Promise<void> {
-  await request(`/admin/variants/${variantId}`, { method: "DELETE", auth: true });
+  await api.delete(`/admin/variants/${variantId}`);
 }
 
-// ─── Admin: Images ────────────────────────────────────────────────────────────
-
+// admin: images
 export async function adminAddImage(productId: number, body: AdminImageCreate): Promise<ApiImage> {
-  const res = await request<{ data: ApiImage }>(`/admin/products/${productId}/images`, {
-    method: "POST",
-    auth: true,
-    body: JSON.stringify(body),
-  });
-  return res.data;
+  const { data } = await api.post<{ data: ApiImage }>(`/admin/products/${productId}/images`, body);
+  return data.data;
 }
 
 export async function adminUpdateImage(
   imageId: number,
   body: { variant_id?: number | null; alt_text?: string | null; position?: number },
 ): Promise<ApiImage> {
-  const res = await request<{ data: ApiImage }>(`/admin/images/${imageId}`, {
-    method: "PUT",
-    auth: true,
-    body: JSON.stringify(body),
-  });
-  return res.data;
+  const { data } = await api.put<{ data: ApiImage }>(`/admin/images/${imageId}`, body);
+  return data.data;
 }
 
 export async function adminDeleteImage(imageId: number): Promise<void> {
-  await request(`/admin/images/${imageId}`, { method: "DELETE", auth: true });
+  await api.delete(`/admin/images/${imageId}`);
 }
 
-// ─── Admin: Orders ────────────────────────────────────────────────────────────
-
+// admin: orders
 export interface AdminOrderFilters {
   status?: OrderStatus;
   date_from?: string;
@@ -279,99 +229,73 @@ export interface AdminOrderFilters {
 export async function adminListOrders(
   filters?: AdminOrderFilters,
 ): Promise<{ data: OrderSummary[]; meta: PaginationMeta }> {
-  return request(
-    `/admin/orders${buildQuery(filters as Record<string, string | number | boolean | undefined>)}`,
-    { auth: true },
-  );
+  const { data } = await api.get("/admin/orders", { params: filters });
+  return data;
 }
 
 export async function adminGetOrder(id: number): Promise<OrderDetail> {
-  const res = await request<{ data: OrderDetail }>(`/admin/orders/${id}`, { auth: true });
-  return res.data;
+  const { data } = await api.get<{ data: OrderDetail }>(`/admin/orders/${id}`);
+  return data.data;
 }
 
 export async function adminUpdateOrderStatus(id: number, status: OrderStatus): Promise<OrderDetail> {
-  const res = await request<{ data: OrderDetail }>(`/admin/orders/${id}/status`, {
-    method: "PATCH",
-    auth: true,
-    body: JSON.stringify({ status }),
-  });
-  return res.data;
+  const { data } = await api.patch<{ data: OrderDetail }>(`/admin/orders/${id}/status`, { status });
+  return data.data;
 }
 
-// ─── Admin: Categories ────────────────────────────────────────────────────────
-
+// admin: categories
 export async function adminListCategories(
   page = 1,
   limit = 100,
 ): Promise<{ data: Category[]; meta: PaginationMeta }> {
-  return request(`/admin/categories?page=${page}&limit=${limit}`, { auth: true });
+  const { data } = await api.get("/admin/categories", { params: { page, limit } });
+  return data;
 }
 
 export async function adminCreateCategory(body: CategoryBody): Promise<Category> {
-  const res = await request<{ data: Category }>("/admin/categories", {
-    method: "POST",
-    auth: true,
-    body: JSON.stringify(body),
-  });
-  return res.data;
+  const { data } = await api.post<{ data: Category }>("/admin/categories", body);
+  return data.data;
 }
 
 export async function adminUpdateCategory(id: number, body: CategoryBody): Promise<Category> {
-  const res = await request<{ data: Category }>(`/admin/categories/${id}`, {
-    method: "PUT",
-    auth: true,
-    body: JSON.stringify(body),
-  });
-  return res.data;
+  const { data } = await api.put<{ data: Category }>(`/admin/categories/${id}`, body);
+  return data.data;
 }
 
 export async function adminDeleteCategory(id: number): Promise<void> {
-  await request(`/admin/categories/${id}`, { method: "DELETE", auth: true });
+  await api.delete(`/admin/categories/${id}`);
 }
 
-// ─── Admin: Leads ─────────────────────────────────────────────────────────────
-
+// admin: leads
 export async function adminListLeads(filters?: {
   q?: string;
   page?: number;
   limit?: number;
 }): Promise<{ data: Lead[]; meta: PaginationMeta }> {
-  return request(
-    `/admin/leads${buildQuery(filters as Record<string, string | number | boolean | undefined>)}`,
-    { auth: true },
-  );
+  const { data } = await api.get("/admin/leads", { params: filters });
+  return data;
 }
 
 export async function adminDeleteLead(id: number): Promise<void> {
-  await request(`/admin/leads/${id}`, { method: "DELETE", auth: true });
+  await api.delete(`/admin/leads/${id}`);
 }
 
-// ─── Admin: Admins ────────────────────────────────────────────────────────────
-
+// admin: admins
 export async function adminListAdmins(): Promise<Admin[]> {
-  const res = await request<{ data: Admin[] }>("/admin/admins", { auth: true });
-  return res.data;
+  const { data } = await api.get<{ data: Admin[] }>("/admin/admins");
+  return data.data;
 }
 
 export async function adminCreateAdmin(body: AdminCreate): Promise<Admin> {
-  const res = await request<{ data: Admin }>("/admin/admins", {
-    method: "POST",
-    auth: true,
-    body: JSON.stringify(body),
-  });
-  return res.data;
+  const { data } = await api.post<{ data: Admin }>("/admin/admins", body);
+  return data.data;
 }
 
 export async function adminUpdateAdmin(id: number, body: AdminUpdate): Promise<Admin> {
-  const res = await request<{ data: Admin }>(`/admin/admins/${id}`, {
-    method: "PUT",
-    auth: true,
-    body: JSON.stringify(body),
-  });
-  return res.data;
+  const { data } = await api.put<{ data: Admin }>(`/admin/admins/${id}`, body);
+  return data.data;
 }
 
 export async function adminDeleteAdmin(id: number): Promise<void> {
-  await request(`/admin/admins/${id}`, { method: "DELETE", auth: true });
+  await api.delete(`/admin/admins/${id}`);
 }

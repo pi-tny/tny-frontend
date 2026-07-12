@@ -1,30 +1,27 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { subscribeLead } from "../services/api";
+import { useSubscribeLead } from "../hooks/mutations";
 import { useToast } from "../context/useToast";
 import { Button, Input } from "./ui";
 import logoTny from "../assets/Ativo 17.png";
 
 export function Footer() {
   const { showToast } = useToast();
+  const subscribeLead = useSubscribeLead();
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const handleNewsletterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     try {
-      await subscribeLead({ name: nome, email, phone: telefone, marketing_consent: true });
+      await subscribeLead.mutateAsync({ name: nome, email, phone: telefone, marketing_consent: true });
       showToast("Inscrição realizada com sucesso!");
       setNome("");
       setEmail("");
       setTelefone("");
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : "Erro ao se inscrever", "error");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -63,7 +60,7 @@ export function Footer() {
         </div>
       </div>
 
-      {/* Newsletter */}
+      {/* newsletter */}
       <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-line bg-surface-2 p-6 sm:p-8">
         <p className="mb-4 text-sm font-semibold text-ink">
           Cadastre-se e receba nossas novidades
@@ -96,8 +93,8 @@ export function Footer() {
             placeholder="Seu telefone"
             className="flex-1"
           />
-          <Button type="submit" size="lg" loading={loading} className="flex-shrink-0">
-            {loading ? "Enviando" : "Inscrever-se"}
+          <Button type="submit" size="lg" loading={subscribeLead.isPending} className="flex-shrink-0">
+            {subscribeLead.isPending ? "Enviando" : "Inscrever-se"}
           </Button>
         </form>
       </div>

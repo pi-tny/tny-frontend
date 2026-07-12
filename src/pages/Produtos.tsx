@@ -1,8 +1,7 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
-import { getProducts, getCategories } from "../services/api";
-import type { ProductSummary, Category, PaginationMeta } from "../types";
+import { useInfiniteProducts, useCategories } from "../hooks/queries";
 import { CardProduto } from "../components/CardProduto";
 import { SkeletonCard } from "../components/SkeletonCard";
 import { Button, EmptyState, cn } from "../components/ui";
@@ -18,37 +17,6 @@ const SORT_OPTIONS = [
 
 type SortValue = (typeof SORT_OPTIONS)[number]["value"];
 
-type State = {
-  items: ProductSummary[];
-  meta: PaginationMeta | null;
-  loading: boolean; // primeira carga / troca de filtro
-  loadingMore: boolean; // "Carregar mais" (append)
-  error: string | null;
-};
-type Action =
-  | { type: "FETCH"; append: boolean }
-  | { type: "SUCCESS"; data: ProductSummary[]; meta: PaginationMeta; append: boolean }
-  | { type: "ERROR"; error: string };
-
-function reducer(s: State, a: Action): State {
-  switch (a.type) {
-    case "FETCH":
-      return a.append
-        ? { ...s, loadingMore: true, error: null }
-        : { ...s, loading: true, error: null };
-    case "SUCCESS":
-      return {
-        loading: false,
-        loadingMore: false,
-        error: null,
-        meta: a.meta,
-        items: a.append ? [...s.items, ...a.data] : a.data,
-      };
-    case "ERROR":
-      return { ...s, loading: false, loadingMore: false, error: a.error };
-  }
-}
-
 export function Produtos() {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -62,47 +30,26 @@ export function Produtos() {
 
   const hasActiveFilters = Boolean(q) || categoryId !== undefined || onSale || inStock;
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [page, setPage] = useState(1);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const [state, dispatch] = useReducer(reducer, {
-    items: [],
-    meta: null,
-    loading: true,
-    loadingMore: false,
-    error: null,
+  const categories = useCategories().data?.data ?? [];
+
+  // filter changes swap the query key, so the list resets to page 1 on its own.
+  const productsQuery = useInfiniteProducts({
+    q: q || undefined,
+    category_id: categoryId,
+    on_sale: onSale || undefined,
+    in_stock: inStock || undefined,
+    sort,
+    limit: PAGE_SIZE,
   });
+  const items = productsQuery.data?.pages.flatMap((p) => p.data) ?? [];
 
-  useEffect(() => {
-    getCategories()
-      .then((res) => setCategories(res.data))
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const append = page > 1;
-    dispatch({ type: "FETCH", append });
-    getProducts({
-      q: q || undefined,
-      category_id: categoryId,
-      on_sale: onSale || undefined,
-      in_stock: inStock || undefined,
-      sort,
-      page,
-      limit: PAGE_SIZE,
-    })
-      .then((res) => dispatch({ type: "SUCCESS", data: res.data, meta: res.meta, append }))
-      .catch((err: Error) => dispatch({ type: "ERROR", error: err.message }));
-  }, [q, categoryId, onSale, inStock, sort, page]);
-
-  // Toda troca de filtro volta para a página 1 (substitui a lista).
   function updateParam(key: string, value: string | null) {
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value);
     else next.delete(key);
     setSearchParams(next);
-    setPage(1);
   }
 
   function submitSearch() {
@@ -111,11 +58,10 @@ export function Produtos() {
 
   function clearFilters() {
     setSearchParams(new URLSearchParams());
-    setPage(1);
   }
 
-  const total = state.meta?.total ?? 0;
-  const hasMore = state.meta ? page < state.meta.total_pages : false;
+  const total = productsQuery.data?.pages[0]?.meta.total ?? 0;
+  const hasMore = productsQuery.hasNextPage;
 
   const chipClass = (active: boolean) =>
     cn(
@@ -135,12 +81,12 @@ export function Produtos() {
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
-      {/* Cabeçalho */}
+      {/* header */}
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold sm:text-3xl">Produtos</h1>
           <p className="mt-1 text-sm text-ink-muted">
-            {state.loading ? "Carregando catálogo…" : `${total} produto${total !== 1 ? "s" : ""} encontrado${total !== 1 ? "s" : ""}`}
+            {productsQuery.isLoading ? "Carregando catálogo…" : `${total} produto${total !== 1 ? "s" : ""} encontrado${total !== 1 ? "s" : ""}`}
           </p>
         </div>
         {hasActiveFilters && (
@@ -153,9 +99,9 @@ export function Produtos() {
         )}
       </div>
 
-      {/* Barra de filtros */}
+      {/* filter bar */}
       <div className="flex flex-col gap-4 rounded-card border border-line bg-surface-2 p-4 sm:p-5">
-        {/* Busca */}
+        {/* search */}
         <div className="flex items-center gap-2 rounded-pill border border-line bg-elevated px-3 py-2 text-ink-muted transition-colors focus-within:border-accent/60">
           <Search size={16} className="flex-shrink-0" />
           <input
@@ -172,7 +118,7 @@ export function Produtos() {
           </Button>
         </div>
 
-        {/* Categorias */}
+        {/* categories */}
         <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button onClick={() => updateParam("categoria", null)} className={chipClass(categoryId === undefined)}>
             Todos
@@ -188,7 +134,7 @@ export function Produtos() {
           ))}
         </div>
 
-        {/* Ordenação + toggles */}
+        {/* sorting + toggles */}
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-xs text-ink-subtle">
             <span className="uppercase tracking-[0.15em]">Ordenar</span>
@@ -225,21 +171,21 @@ export function Produtos() {
         </div>
       </div>
 
-      {/* Erro */}
-      {state.error && (
+      {/* error */}
+      {productsQuery.error && (
         <div className="rounded-[16px] border border-danger/20 bg-danger/5 p-4 text-center text-sm text-danger">
-          {state.error}
+          {productsQuery.error.message}
         </div>
       )}
 
-      {/* Grid */}
-      {state.loading ? (
+      {/* grid */}
+      {productsQuery.isLoading ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: PAGE_SIZE }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
         </div>
-      ) : state.items.length === 0 && !state.error ? (
+      ) : items.length === 0 && !productsQuery.error ? (
         <EmptyState
           title="Nenhum produto encontrado"
           description="Ajuste os filtros ou tente outro termo de busca."
@@ -254,7 +200,7 @@ export function Produtos() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {state.items.map((p) => (
+            {items.map((p) => (
               <CardProduto
                 key={p.id}
                 id={p.id}
@@ -266,19 +212,19 @@ export function Produtos() {
             ))}
           </div>
 
-          {/* Carregar mais (acumula abaixo) */}
+          {/* load more (appends below) */}
           <div className="mt-6 flex flex-col items-center gap-3">
             <p className="text-xs text-ink-subtle">
-              Mostrando {state.items.length} de {total} produtos
+              Mostrando {items.length} de {total} produtos
             </p>
             {hasMore && (
               <Button
                 variant="ghost"
                 size="lg"
-                loading={state.loadingMore}
-                onClick={() => setPage((prev) => prev + 1)}
+                loading={productsQuery.isFetchingNextPage}
+                onClick={() => productsQuery.fetchNextPage()}
               >
-                {state.loadingMore ? "Carregando" : "Carregar mais"}
+                {productsQuery.isFetchingNextPage ? "Carregando" : "Carregar mais"}
               </Button>
             )}
           </div>

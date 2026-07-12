@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import {
   adminAddImage,
@@ -7,15 +8,15 @@ import {
   adminCreateVariant,
   adminDeleteImage,
   adminDeleteVariant,
-  adminGetProduct,
   adminSetProductCategories,
   adminUpdateImage,
   adminUpdateProduct,
   adminUpdateVariant,
-  getCategories,
 } from "../../services/api";
-import type { Category } from "../../types";
+import { useAdminProduct, useCategories } from "../../hooks/queries";
+import type { ProductDetail } from "../../types";
 import { useToast } from "../../context/useToast";
+import { productSchema, validateForm } from "../../lib/validation";
 import { Button, Field, Input, Spinner, cn } from "../../components/ui";
 
 type VariantRow = {
@@ -33,7 +34,7 @@ type ImageRow = {
   id?: number;
   url: string;
   alt_text: string;
-  variantKey: string | null; // referência à VariantRow.key; null = imagem geral do produto
+  variantKey: string | null; // points to a VariantRow.key; null means a product-wide image
 };
 
 function newKey(): string {
@@ -45,78 +46,79 @@ function toNumberOrNull(v: string): number | null {
   return trimmed === "" ? null : Number(trimmed);
 }
 
+// turn a loaded product into editable rows, wiring each image to its variant row.
+function buildRows(initial: ProductDetail | null): { variants: VariantRow[]; images: ImageRow[] } {
+  if (!initial) return { variants: [], images: [] };
+  const variants: VariantRow[] = initial.variants.map((v) => ({
+    key: newKey(),
+    id: v.id,
+    variant_sku: v.variant_sku,
+    color: v.color,
+    size: v.size,
+    quantity: String(v.quantity),
+    price: v.price != null ? String(v.price) : "",
+  }));
+  const keyByVariantId = new Map(variants.map((r) => [r.id, r.key]));
+  const images: ImageRow[] = initial.images.map((im) => ({
+    key: newKey(),
+    id: im.id,
+    url: im.url,
+    alt_text: im.alt_text ?? "",
+    variantKey: im.variant_id != null ? (keyByVariantId.get(im.variant_id) ?? null) : null,
+  }));
+  return { variants, images };
+}
+
 export function CadastroProduto() {
   const { id } = useParams();
   const productId = id ? Number(id) : null;
+  const { data, isLoading, error } = useAdminProduct(productId ?? undefined);
+
+  if (productId && isLoading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center text-ink-muted">
+        <Spinner className="h-6 w-6" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-2xl rounded-card border border-danger/20 bg-danger/5 p-8 text-center text-danger">
+        {error.message}
+      </div>
+    );
+  }
+
+  // remount the form per product (or "new") so its state seeds from `initial`.
+  return <ProductForm key={productId ?? "new"} productId={productId} initial={data ?? null} />;
+}
+
+function ProductForm({ productId, initial }: { productId: number | null; initial: ProductDetail | null }) {
   const isEdit = productId !== null;
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
+  const categories = useCategories().data?.data ?? [];
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(isEdit); // carrega o produto no modo edição
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  const [sku, setSku] = useState("");
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [price, setPrice] = useState("");
-  const [promo, setPromo] = useState("");
-  const [active, setActive] = useState(true);
-  const [selectedCats, setSelectedCats] = useState<number[]>([]);
-  const [variants, setVariants] = useState<VariantRow[]>([]);
-  const [images, setImages] = useState<ImageRow[]>([]);
-
-  useEffect(() => {
-    getCategories()
-      .then((r) => setCategories(r.data))
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!productId) return;
-    adminGetProduct(productId)
-      .then((p) => {
-        setSku(p.sku);
-        setName(p.name);
-        setDescription(p.description);
-        setPrice(String(p.price));
-        setPromo(p.promotional_price != null ? String(p.promotional_price) : "");
-        setActive(p.active);
-        setSelectedCats(p.categories.map((c) => c.id));
-        const variantRows: VariantRow[] = p.variants.map((v) => ({
-          key: newKey(),
-          id: v.id,
-          variant_sku: v.variant_sku,
-          color: v.color,
-          size: v.size,
-          quantity: String(v.quantity),
-          price: v.price != null ? String(v.price) : "",
-        }));
-        setVariants(variantRows);
-        const keyByVariantId = new Map(variantRows.map((r) => [r.id, r.key]));
-        setImages(
-          p.images.map((im) => ({
-            key: newKey(),
-            id: im.id,
-            url: im.url,
-            alt_text: im.alt_text ?? "",
-            variantKey: im.variant_id != null ? (keyByVariantId.get(im.variant_id) ?? null) : null,
-          })),
-        );
-        setLoading(false);
-      })
-      .catch((e: Error) => {
-        setLoadError(e.message);
-        setLoading(false);
-      });
-  }, [productId]);
+  const [initialRows] = useState(() => buildRows(initial));
+  const [sku, setSku] = useState(initial?.sku ?? "");
+  const [name, setName] = useState(initial?.name ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [price, setPrice] = useState(initial ? String(initial.price) : "");
+  const [promo, setPromo] = useState(
+    initial?.promotional_price != null ? String(initial.promotional_price) : "",
+  );
+  const [active, setActive] = useState(initial?.active ?? true);
+  const [selectedCats, setSelectedCats] = useState<number[]>(initial?.categories.map((c) => c.id) ?? []);
+  const [variants, setVariants] = useState<VariantRow[]>(initialRows.variants);
+  const [images, setImages] = useState<ImageRow[]>(initialRows.images);
 
   const toggleCategory = (catId: number) => {
     setSelectedCats((prev) => (prev.includes(catId) ? prev.filter((c) => c !== catId) : [...prev, catId]));
   };
 
-  // ─── Variantes ───
+  // variants
   const addVariant = () =>
     setVariants((prev) => [...prev, { key: newKey(), variant_sku: "", color: "", size: "", quantity: "0", price: "" }]);
 
@@ -136,7 +138,7 @@ export function CadastroProduto() {
     setVariants((prev) => prev.filter((v) => v.key !== row.key));
   };
 
-  // ─── Imagens ───
+  // images
   const addImage = () =>
     setImages((prev) => [...prev, { key: newKey(), url: "", alt_text: "", variantKey: null }]);
 
@@ -165,14 +167,10 @@ export function CadastroProduto() {
     price: toNumberOrNull(v.price),
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!sku.trim() || !name.trim() || !description.trim() || Number(price) <= 0) {
-      showToast("Preencha SKU, nome, descrição e um preço válido.", "error");
-      return;
-    }
-    setSaving(true);
-    try {
+  // saving a product spans several endpoints (product, categories, variants,
+  // images) in order, so we run the whole flow inside one mutation.
+  const saveProduct = useMutation({
+    mutationFn: async () => {
       const core = {
         sku: sku.trim(),
         name: name.trim(),
@@ -182,7 +180,7 @@ export function CadastroProduto() {
         active,
       };
 
-      // Resolve a variantKey local → id real da variante (para atribuir imagens).
+      // map each local variantKey to its real variant id, so images can reference it
       const variantIdByKey: Record<string, number> = {};
 
       if (isEdit && productId) {
@@ -205,7 +203,6 @@ export function CadastroProduto() {
             await adminAddImage(productId, { url: im.url.trim(), alt_text: im.alt_text || undefined, variant_id, position: i });
           }
         }
-        showToast("Produto atualizado com sucesso!");
       } else {
         const created = await adminCreateProduct({ ...core, category_ids: selectedCats });
         for (const v of variants) {
@@ -217,31 +214,27 @@ export function CadastroProduto() {
           const variant_id = im.variantKey ? (variantIdByKey[im.variantKey] ?? null) : null;
           await adminAddImage(created.id, { url: im.url.trim(), alt_text: im.alt_text || undefined, variant_id, position: i });
         }
-        showToast("Produto criado com sucesso!");
       }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      showToast(isEdit ? "Produto atualizado com sucesso!" : "Produto criado com sucesso!");
       navigate("/admin/gerenciar-estoque");
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Erro ao salvar produto", "error");
-    } finally {
-      setSaving(false);
-    }
+    },
+    onError: (err) => showToast(err instanceof Error ? err.message : "Erro ao salvar produto", "error"),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsed = validateForm(
+      productSchema,
+      { sku, name, description, price: Number(price) },
+      (m) => showToast(m, "error"),
+      "Preencha SKU, nome, descrição e um preço válido.",
+    );
+    if (!parsed) return;
+    saveProduct.mutate();
   };
-
-  if (loading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center text-ink-muted">
-        <Spinner className="h-6 w-6" />
-      </div>
-    );
-  }
-
-  if (loadError) {
-    return (
-      <div className="mx-auto max-w-2xl rounded-card border border-danger/20 bg-danger/5 p-8 text-center text-danger">
-        {loadError}
-      </div>
-    );
-  }
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -252,7 +245,7 @@ export function CadastroProduto() {
       <h1 className="mb-8 text-3xl font-bold">{isEdit ? "Editar produto" : "Cadastrar produto"}</h1>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Dados principais */}
+        {/* core fields */}
         <section className="space-y-4 rounded-card border border-line bg-surface-2 p-6">
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-ink-muted">Dados</h2>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -287,7 +280,7 @@ export function CadastroProduto() {
           </label>
         </section>
 
-        {/* Categorias */}
+        {/* categories */}
         <section className="space-y-3 rounded-card border border-line bg-surface-2 p-6">
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-ink-muted">Categorias</h2>
           {categories.length === 0 ? (
@@ -316,7 +309,7 @@ export function CadastroProduto() {
           )}
         </section>
 
-        {/* Variantes */}
+        {/* variants */}
         <section className="space-y-3 rounded-card border border-line bg-surface-2 p-6">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-ink-muted">Variantes (cor / tamanho / estoque)</h2>
@@ -344,7 +337,7 @@ export function CadastroProduto() {
           )}
         </section>
 
-        {/* Imagens */}
+        {/* images */}
         <section className="space-y-3 rounded-card border border-line bg-surface-2 p-6">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-ink-muted">Imagens (URL)</h2>
@@ -409,8 +402,8 @@ export function CadastroProduto() {
           <Button type="button" variant="ghost" onClick={() => navigate("/admin/gerenciar-estoque")}>
             Cancelar
           </Button>
-          <Button type="submit" size="lg" loading={saving}>
-            {saving ? "Salvando" : isEdit ? "Salvar alterações" : "Cadastrar produto"}
+          <Button type="submit" size="lg" loading={saveProduct.isPending}>
+            {saveProduct.isPending ? "Salvando" : isEdit ? "Salvar alterações" : "Cadastrar produto"}
           </Button>
         </div>
       </form>

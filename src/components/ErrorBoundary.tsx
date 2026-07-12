@@ -7,7 +7,7 @@ interface State {
   hasError: boolean;
 }
 
-/** Captura erros de renderização e exibe um fallback em vez de tela branca. */
+/** catches render errors and shows a fallback instead of a blank screen. */
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false };
 

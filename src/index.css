@@ -1,19 +1,17 @@
 @import "tailwindcss";
 
-/* ─────────────────────────────────────────────────────────────
-   TNY — Design tokens (dark premium)
-   Paleta em camadas + 3 papéis de cor:
-     • branco  → ação primária (CTA)
-     • dourado → accent de marca (foco, nav ativo, destaques)
-     • esmeralda → preço / sucesso
-   Tipografia: Syne (display) + Manrope (corpo)
-   ───────────────────────────────────────────────────────────── */
+/* tny design tokens (dark premium).
+   layered palette with 3 color roles:
+     white -> primary action (cta)
+     gold -> brand accent (focus, active nav, highlights)
+     emerald -> price / success
+   type: syne (display) + manrope (body) */
 @theme {
-  /* Tipografia */
+  /* type */
   --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-display: "Syne", "Manrope", ui-sans-serif, sans-serif;
 
-  /* Superfícies */
+  /* surfaces */
   --color-bg: #060606;
   --color-surface: #101012;
   --color-surface-2: #151517;
@@ -21,22 +19,22 @@
   --color-line: #ffffff1a; /* white/10 */
   --color-line-strong: #ffffff2e; /* white/18 */
 
-  /* Texto */
+  /* text */
   --color-ink: #f4f4f5;
   --color-ink-muted: #a1a1aa;
   --color-ink-subtle: #71717a;
 
-  /* Papéis semânticos */
-  --color-accent: #d9a441; /* dourado de marca */
+  /* semantic roles */
+  --color-accent: #d9a441; /* brand gold */
   --color-accent-strong: #ecc06a;
-  --color-price: #34d399; /* esmeralda — preço/sucesso */
+  --color-price: #34d399; /* emerald — price/success */
   --color-danger: #f87171;
 
-  /* Raios */
+  /* radii */
   --radius-card: 20px;
   --radius-pill: 9999px;
 
-  /* Animações */
+  /* animations */
   --animate-fade-in: fade-in 0.2s ease-out;
   --animate-slide-up: slide-up 0.25s ease-out;
   --animate-bump: bump 0.35s ease-out;

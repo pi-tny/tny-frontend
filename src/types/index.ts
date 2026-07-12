@@ -1,6 +1,6 @@
-// ─── Internal frontend types ────────────────────────────────────────────────
+// internal frontend types
 
-/** Payload mínimo aceito por `addToCart` (ver CarrinhoContext). */
+/** minimal payload accepted by `addToCart` (see CarrinhoContext). */
 export interface Produto {
   id: number;
   name: string;
@@ -20,7 +20,7 @@ export interface CartItem {
   variantId?: number;
 }
 
-// ─── Backend API types ───────────────────────────────────────────────────────
+// backend api types
 
 export interface Category {
   id: number;
@@ -96,7 +96,7 @@ export interface OrderResponse {
   whatsapp_message: string;
 }
 
-// ─── Admin: Leads & Admins ────────────────────────────────────────────────────
+// admin: leads & admins
 
 export interface Lead {
   id: number;
@@ -134,9 +134,9 @@ export interface CategoryBody {
   description?: string | null;
 }
 
-// ─── Admin: Orders ────────────────────────────────────────────────────────────
+// admin: orders
 
-/** Status acionáveis (o backend só aceita estes no PATCH/filtro). */
+/** actionable statuses (the backend only accepts these in the patch and filter). */
 export type OrderStatus = "new" | "fulfilled" | "ignored";
 
 export interface OrderSummary {
@@ -144,8 +144,8 @@ export interface OrderSummary {
   name: string;
   phone: string;
   total: number;
-  // Resposta serializa como string livre; o banco pode conter valores legados
-  // (ex.: "processing", "cancelled") além dos status acionáveis.
+  // serialized as a free string; the db may hold legacy values
+  // (e.g. "processing", "cancelled") besides the actionable statuses.
   status: string;
   created_at: string;
 }
@@ -169,7 +169,7 @@ export interface OrderDetail extends OrderSummary {
   items: AdminOrderItem[];
 }
 
-// ─── Admin request bodies ─────────────────────────────────────────────────────
+// admin request bodies
 
 export interface AdminProductCreate {
   sku: string;

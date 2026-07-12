@@ -1,15 +1,12 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Pencil, Trash2, X } from "lucide-react";
-import {
-  adminCreateAdmin,
-  adminDeleteAdmin,
-  adminListAdmins,
-  adminUpdateAdmin,
-} from "../../services/api";
+import { useAdminAdmins } from "../../hooks/queries";
+import { useCreateAdmin, useDeleteAdmin, useUpdateAdmin } from "../../hooks/mutations";
 import type { Admin, AdminUpdate } from "../../types";
 import { useAuth } from "../../context/useAuth";
 import { useToast } from "../../context/useToast";
+import { adminEditSchema, adminSchema, validateForm } from "../../lib/validation";
 import { Badge, Button, EmptyState, Field, Input, Spinner } from "../../components/ui";
 
 export function Admins() {
@@ -17,23 +14,18 @@ export function Admins() {
   const { showToast } = useToast();
   const { admin: currentAdmin } = useAuth();
 
-  const [admins, setAdmins] = useState<Admin[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data, isLoading, error } = useAdminAdmins();
+  const admins = data ?? [];
+  const createAdmin = useCreateAdmin();
+  const updateAdmin = useUpdateAdmin();
+  const deleteAdmin = useDeleteAdmin();
+  const saving = createAdmin.isPending || updateAdmin.isPending;
+
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [active, setActive] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  const reload = () =>
-    adminListAdmins()
-      .then(setAdmins)
-      .catch((e: Error) => setError(e.message));
-
-  useEffect(() => {
-    reload();
-  }, []);
 
   const resetForm = () => {
     setEditingId(null);
@@ -51,44 +43,37 @@ export function Admins() {
     setActive(a.active);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim()) return;
-    if (!editingId && password.length < 6) {
-      showToast("A senha deve ter ao menos 6 caracteres.", "error");
-      return;
-    }
-    setSaving(true);
-    try {
-      if (editingId) {
-        const body: AdminUpdate = { name: name.trim(), email: email.trim(), active };
-        if (password.trim()) body.password = password.trim();
-        await adminUpdateAdmin(editingId, body);
-        showToast("Administrador atualizado.");
-      } else {
-        await adminCreateAdmin({ name: name.trim(), email: email.trim(), password: password.trim() });
-        showToast("Administrador criado.");
-      }
-      resetForm();
-      await reload();
-    } catch (err: unknown) {
+    const schema = editingId ? adminEditSchema : adminSchema;
+    if (!validateForm(schema, { name, email, password }, (m) => showToast(m, "error"))) return;
+    const onError = (err: unknown) =>
       showToast(err instanceof Error ? err.message : "Erro ao salvar administrador", "error");
-    } finally {
-      setSaving(false);
+    if (editingId) {
+      const body: AdminUpdate = { name: name.trim(), email: email.trim(), active };
+      if (password.trim()) body.password = password.trim();
+      updateAdmin.mutate(
+        { id: editingId, body },
+        { onSuccess: () => { showToast("Administrador atualizado."); resetForm(); }, onError },
+      );
+    } else {
+      createAdmin.mutate(
+        { name: name.trim(), email: email.trim(), password: password.trim() },
+        { onSuccess: () => { showToast("Administrador criado."); resetForm(); }, onError },
+      );
     }
   };
 
-  const handleDelete = async (a: Admin) => {
+  const handleDelete = (a: Admin) => {
     if (a.id === currentAdmin?.id) return;
     if (!confirm(`Excluir o administrador "${a.name}"?`)) return;
-    try {
-      await adminDeleteAdmin(a.id);
-      showToast("Administrador excluído.");
-      if (editingId === a.id) resetForm();
-      await reload();
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : "Erro ao excluir administrador", "error");
-    }
+    deleteAdmin.mutate(a.id, {
+      onSuccess: () => {
+        showToast("Administrador excluído.");
+        if (editingId === a.id) resetForm();
+      },
+      onError: (err) => showToast(err instanceof Error ? err.message : "Erro ao excluir administrador", "error"),
+    });
   };
 
   return (
@@ -100,7 +85,7 @@ export function Admins() {
         </Button>
       </div>
 
-      {/* Formulário */}
+      {/* form */}
       <form onSubmit={handleSubmit} className="mb-6 space-y-4 rounded-card border border-line bg-surface-2 p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-ink-muted">
@@ -148,11 +133,11 @@ export function Admins() {
         </div>
       </form>
 
-      {/* Lista */}
+      {/* list */}
       {error && (
-        <div className="mb-4 rounded-[16px] border border-danger/20 bg-danger/5 p-4 text-center text-sm text-danger">{error}</div>
+        <div className="mb-4 rounded-[16px] border border-danger/20 bg-danger/5 p-4 text-center text-sm text-danger">{error.message}</div>
       )}
-      {admins === null ? (
+      {isLoading ? (
         <div className="flex min-h-[20vh] items-center justify-center text-ink-muted">
           <Spinner className="h-6 w-6" />
         </div>

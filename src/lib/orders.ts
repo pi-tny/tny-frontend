@@ -1,11 +1,11 @@
 import type { OrderStatus } from "../types";
 
-/** Status acionáveis pelo admin (aceitos pelo backend no PATCH e no filtro). */
+/** statuses the admin can set (accepted by the backend in the patch and filter). */
 export const ORDER_STATUSES: OrderStatus[] = ["new", "fulfilled", "ignored"];
 
 type Tone = "accent" | "price" | "neutral" | "danger";
 
-// Inclui valores acionáveis + legados que podem existir no banco (seed).
+// includes actionable values plus legacy ones that may exist in the db (seed).
 const STATUS_LABELS: Record<string, string> = {
   new: "Novo",
   fulfilled: "Atendido",
@@ -24,14 +24,14 @@ const STATUS_TONES: Record<string, Tone> = {
   pending: "accent",
 };
 
-/** Rótulo do status acionável (para botões/chips tipados). */
+/** label for an actionable status (for typed buttons/chips). */
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   new: STATUS_LABELS.new,
   fulfilled: STATUS_LABELS.fulfilled,
   ignored: STATUS_LABELS.ignored,
 };
 
-/** Tolerante a status desconhecidos: humaniza a string crua como fallback. */
+/** tolerant of unknown statuses: humanizes the raw string as a fallback. */
 export function orderStatusLabel(status: string): string {
   return STATUS_LABELS[status] ?? status.charAt(0).toUpperCase() + status.slice(1);
 }

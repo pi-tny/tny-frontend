@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ClipboardList,
@@ -10,11 +9,9 @@ import {
   Users,
   Warehouse,
 } from "lucide-react";
-import { adminListLeads, adminListOrders, adminListProducts } from "../../services/api";
+import { useAdminLeads, useAdminOrders, useAdminProducts } from "../../hooks/queries";
 import { useAuth } from "../../context/useAuth";
 import { Button } from "../../components/ui";
-
-type Stats = { products: number; newOrders: number; leads: number };
 
 const CARDS = [
   { icon: ClipboardList, title: "Pedidos", desc: "Acompanhe pedidos e atualize o status.", to: "/admin/pedidos" },
@@ -28,17 +25,10 @@ const CARDS = [
 export function Dashboard() {
   const navigate = useNavigate();
   const { admin, logout } = useAuth();
-  const [stats, setStats] = useState<Stats | null>(null);
 
-  useEffect(() => {
-    Promise.all([
-      adminListProducts({ limit: 1 }),
-      adminListOrders({ status: "new", limit: 1 }),
-      adminListLeads({ limit: 1 }),
-    ])
-      .then(([p, o, l]) => setStats({ products: p.meta.total, newOrders: o.meta.total, leads: l.meta.total }))
-      .catch(() => {});
-  }, []);
+  const productsTotal = useAdminProducts({ limit: 1 }).data?.meta.total;
+  const newOrdersTotal = useAdminOrders({ status: "new", limit: 1 }).data?.meta.total;
+  const leadsTotal = useAdminLeads("", 1, 1).data?.meta.total;
 
   const handleLogout = async () => {
     await logout();
@@ -46,9 +36,9 @@ export function Dashboard() {
   };
 
   const statItems = [
-    { label: "Produtos", value: stats?.products },
-    { label: "Pedidos novos", value: stats?.newOrders },
-    { label: "Leads", value: stats?.leads },
+    { label: "Produtos", value: productsTotal },
+    { label: "Pedidos novos", value: newOrdersTotal },
+    { label: "Leads", value: leadsTotal },
   ];
 
   return (
@@ -70,7 +60,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* stats */}
       <div className="mb-8 grid grid-cols-3 gap-4">
         {statItems.map((s) => (
           <div key={s.label} className="rounded-card border border-line bg-surface-2 p-5">
@@ -80,7 +70,7 @@ export function Dashboard() {
         ))}
       </div>
 
-      {/* Navegação */}
+      {/* navigation */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {CARDS.map((card) => (
           <button

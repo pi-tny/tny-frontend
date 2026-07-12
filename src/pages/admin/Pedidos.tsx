@@ -1,8 +1,8 @@
-import { useEffect, useReducer, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { adminListOrders } from "../../services/api";
-import type { OrderStatus, OrderSummary, PaginationMeta } from "../../types";
+import { useAdminOrders } from "../../hooks/queries";
+import type { OrderStatus } from "../../types";
 import { Badge, Button, EmptyState, Spinner, cn } from "../../components/ui";
 import {
   ORDER_STATUSES,
@@ -15,48 +15,25 @@ import {
 
 const PAGE_SIZE = 15;
 
-type State = {
-  items: OrderSummary[];
-  meta: PaginationMeta | null;
-  loading: boolean;
-  error: string | null;
-};
-type Action =
-  | { type: "FETCH" }
-  | { type: "SUCCESS"; items: OrderSummary[]; meta: PaginationMeta }
-  | { type: "ERROR"; error: string };
-
-function reducer(s: State, a: Action): State {
-  switch (a.type) {
-    case "FETCH":
-      return { ...s, loading: true, error: null };
-    case "SUCCESS":
-      return { items: a.items, meta: a.meta, loading: false, error: null };
-    case "ERROR":
-      return { ...s, loading: false, error: a.error };
-  }
-}
-
 export function Pedidos() {
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<OrderStatus | null>(null);
   const [page, setPage] = useState(1);
-  const [state, dispatch] = useReducer(reducer, { items: [], meta: null, loading: true, error: null });
 
-  useEffect(() => {
-    dispatch({ type: "FETCH" });
-    adminListOrders({ status: statusFilter ?? undefined, page, limit: PAGE_SIZE })
-      .then((res) => dispatch({ type: "SUCCESS", items: res.data, meta: res.meta }))
-      .catch((err: Error) => dispatch({ type: "ERROR", error: err.message }));
-  }, [statusFilter, page]);
+  const { data, isLoading, error } = useAdminOrders({
+    status: statusFilter ?? undefined,
+    page,
+    limit: PAGE_SIZE,
+  });
+  const items = data?.data ?? [];
 
   const selectStatus = (s: OrderStatus | null) => {
     setStatusFilter(s);
     setPage(1);
   };
 
-  const total = state.meta?.total ?? 0;
-  const totalPages = state.meta?.total_pages ?? 1;
+  const total = data?.meta.total ?? 0;
+  const totalPages = data?.meta.total_pages ?? 1;
 
   const chipClass = (active: boolean) =>
     cn(
@@ -78,7 +55,7 @@ export function Pedidos() {
         </Button>
       </div>
 
-      {/* Filtro por status */}
+      {/* status filter */}
       <div className="mb-5 flex flex-wrap gap-2">
         <button onClick={() => selectStatus(null)} className={chipClass(statusFilter === null)}>
           Todos
@@ -90,21 +67,21 @@ export function Pedidos() {
         ))}
       </div>
 
-      {state.error && (
+      {error && (
         <div className="mb-4 rounded-[16px] border border-danger/20 bg-danger/5 p-4 text-center text-sm text-danger">
-          {state.error}
+          {error.message}
         </div>
       )}
 
-      {state.loading ? (
+      {isLoading ? (
         <div className="flex min-h-[30vh] items-center justify-center text-ink-muted">
           <Spinner className="h-6 w-6" />
         </div>
-      ) : state.items.length === 0 ? (
+      ) : items.length === 0 ? (
         <EmptyState title="Nenhum pedido encontrado" description="Os pedidos recebidos aparecerão aqui." />
       ) : (
         <div className="space-y-2">
-          {state.items.map((o) => (
+          {items.map((o) => (
             <Link
               key={o.id}
               to={`/admin/pedidos/${o.id}`}
