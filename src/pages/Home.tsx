@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
 import { useProducts, useCategories } from "../hooks/queries";
 import { CardProduto } from "../components/CardProduto";
 import { SkeletonCard } from "../components/SkeletonCard";
@@ -17,6 +18,7 @@ const FALLBACK_IMAGE =
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQQrGh0t0eOHJm8epZmolwelw4QK_eUAwY8z5Jxs-t0lA&s=10";
 
 const PAGE_SIZE = 8;
+const FEATURED_CATEGORIES = 8;
 
 export function Home() {
   const [searchParams] = useSearchParams();
@@ -105,7 +107,7 @@ export function Home() {
                 <p className="text-center text-[11px] font-medium sm:text-xs">Todos</p>
               </button>
 
-              {categories.map((cat) => (
+              {categories.slice(0, FEATURED_CATEGORIES).map((cat) => (
                 <button
                   key={cat.id}
                   type="button"
@@ -124,6 +126,19 @@ export function Home() {
                   <p className="line-clamp-1 text-center text-[11px] font-medium sm:text-xs">{cat.name}</p>
                 </button>
               ))}
+
+              {/* delegate full browsing to the catalog page */}
+              {categories.length > FEATURED_CATEGORIES && (
+                <Link
+                  to="/produtos"
+                  className="flex w-[72px] flex-shrink-0 flex-col items-center gap-2 rounded-2xl border border-line bg-surface-2 p-2.5 text-ink-muted transition-all duration-200 hover:border-line-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 sm:w-20"
+                >
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full border border-line-strong sm:h-14 sm:w-14">
+                    <ArrowRight size={20} />
+                  </span>
+                  <p className="line-clamp-1 text-center text-[11px] font-medium sm:text-xs">Ver todas</p>
+                </Link>
+              )}
             </div>
           </div>
         </section>

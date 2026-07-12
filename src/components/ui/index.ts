@@ -6,3 +6,8 @@ export { Spinner } from "./Spinner";
 export { EmptyState } from "./EmptyState";
 export { Field, Input } from "./Field";
 export { SafeImage } from "./SafeImage";
+export { Combobox } from "./Combobox";
+export type { ComboboxItem } from "./Combobox";
+export { useConfirm } from "./ConfirmDialog";
+export type { ConfirmOptions } from "./ConfirmDialog";
+export { chipClass, toggleClass } from "./filterClasses";

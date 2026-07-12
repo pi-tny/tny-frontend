@@ -23,6 +23,7 @@ export const keys = {
   product: (id: number) => ["product", id] as const,
   related: (id: number) => ["product", id, "related"] as const,
   categories: ["categories"] as const,
+  allStoreCategories: ["categories", "all"] as const,
   me: ["auth", "me"] as const,
   admin: {
     products: (filters?: AdminProductFilters) => ["admin", "products", filters ?? {}] as const,
@@ -30,6 +31,7 @@ export const keys = {
     orders: (filters?: AdminOrderFilters) => ["admin", "orders", filters ?? {}] as const,
     order: (id: number) => ["admin", "order", id] as const,
     categories: ["admin", "categories"] as const,
+    allCategories: ["admin", "categories", "all"] as const,
     leads: (q?: string) => ["admin", "leads", q ?? ""] as const,
     admins: ["admin", "admins"] as const,
   },
@@ -66,7 +68,25 @@ export function useRelatedProducts(id: number | undefined) {
 }
 
 export function useCategories() {
-  return useQuery({ queryKey: keys.categories, queryFn: getCategories });
+  return useQuery({ queryKey: keys.categories, queryFn: () => getCategories() });
+}
+
+// storefront counterpart of useAllCategories: pages the public endpoint to load
+// every category, so the /produtos combobox can search the full list.
+export function useAllStoreCategories() {
+  return useQuery({
+    queryKey: keys.allStoreCategories,
+    queryFn: async () => {
+      const LIMIT = 100;
+      const first = await getCategories(1, LIMIT);
+      let all = first.data;
+      for (let page = 2; page <= first.meta.total_pages; page++) {
+        const next = await getCategories(page, LIMIT);
+        all = all.concat(next.data);
+      }
+      return all;
+    },
+  });
 }
 
 // admin
@@ -92,6 +112,24 @@ export function useAdminOrder(id: number) {
 
 export function useAdminCategories() {
   return useQuery({ queryKey: keys.admin.categories, queryFn: () => adminListCategories() });
+}
+
+// loads every category by paging through the admin endpoint (limit caps at 100),
+// so client-side search/filter can work over the full list.
+export function useAllCategories() {
+  return useQuery({
+    queryKey: keys.admin.allCategories,
+    queryFn: async () => {
+      const LIMIT = 100;
+      const first = await adminListCategories(1, LIMIT);
+      let all = first.data;
+      for (let page = 2; page <= first.meta.total_pages; page++) {
+        const next = await adminListCategories(page, LIMIT);
+        all = all.concat(next.data);
+      }
+      return all;
+    },
+  });
 }
 
 export function useAdminLeads(q: string, page: number, limit: number) {

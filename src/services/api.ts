@@ -100,8 +100,11 @@ export async function getRelatedProducts(id: number, limit = 4): Promise<Product
 }
 
 // categories
-export async function getCategories(): Promise<{ data: Category[]; meta: PaginationMeta }> {
-  const { data } = await api.get("/categories", { params: { limit: 50 } });
+export async function getCategories(
+  page = 1,
+  limit = 50,
+): Promise<{ data: Category[]; meta: PaginationMeta }> {
+  const { data } = await api.get("/categories", { params: { page, limit } });
   return data;
 }
 

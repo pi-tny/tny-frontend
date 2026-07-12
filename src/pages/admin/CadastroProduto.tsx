@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, X } from "lucide-react";
 import {
   adminAddImage,
   adminCreateProduct,
@@ -13,11 +13,12 @@ import {
   adminUpdateProduct,
   adminUpdateVariant,
 } from "../../services/api";
-import { useAdminProduct, useCategories } from "../../hooks/queries";
-import type { ProductDetail } from "../../types";
+import { useAdminProduct, useAllCategories } from "../../hooks/queries";
+import { useCreateCategory } from "../../hooks/mutations";
+import type { Category, ProductDetail } from "../../types";
 import { useToast } from "../../context/useToast";
-import { productSchema, validateForm } from "../../lib/validation";
-import { Button, Field, Input, Spinner, cn } from "../../components/ui";
+import { categorySchema, productSchema, validateForm } from "../../lib/validation";
+import { Button, Combobox, Field, Input, Spinner, useConfirm } from "../../components/ui";
 
 type VariantRow = {
   key: string;
@@ -94,12 +95,98 @@ export function CadastroProduto() {
   return <ProductForm key={productId ?? "new"} productId={productId} initial={data ?? null} />;
 }
 
+// searchable multi-select for categories, with inline creation of a new one.
+function CategoryPicker({
+  categories,
+  selected,
+  onToggle,
+}: {
+  categories: Category[];
+  selected: number[];
+  onToggle: (id: number) => void;
+}) {
+  const { showToast } = useToast();
+  const createCategory = useCreateCategory();
+  const items = categories.map((c) => ({ value: c.id, label: c.name, description: c.description }));
+  const byId = new Map(categories.map((c) => [c.id, c] as const));
+  const selectedCats = selected.map((id) => byId.get(id)).filter((c): c is Category => Boolean(c));
+
+  const handleCreate = (name: string, clearQuery: () => void) => {
+    if (!validateForm(categorySchema, { name }, (m) => showToast(m, "error"))) return;
+    createCategory.mutate(
+      { name: name.trim(), description: null },
+      {
+        onSuccess: (cat) => {
+          onToggle(cat.id); // newly created is unselected, so this selects it
+          showToast(`Categoria "${cat.name}" criada.`);
+          clearQuery();
+        },
+        onError: (e) => showToast(e instanceof Error ? e.message : "Erro ao criar categoria", "error"),
+      },
+    );
+  };
+
+  return (
+    <div className="space-y-3">
+      <Combobox
+        items={items}
+        isSelected={(v) => selected.includes(v)}
+        onSelect={onToggle}
+        triggerContent={<span className="text-ink-subtle">Buscar e selecionar categorias…</span>}
+        searchPlaceholder="Buscar categoria..."
+        emptyLabel={(q) => (q ? `Nenhuma categoria encontrada para "${q}"` : "Nenhuma categoria cadastrada.")}
+        footer={({ query, clearQuery }) => {
+          const exact = items.some((i) => i.label.trim().toLowerCase() === query.toLowerCase());
+          if (!query || exact) return null;
+          return (
+            <button
+              type="button"
+              onClick={() => handleCreate(query, clearQuery)}
+              disabled={createCategory.isPending}
+              className="flex w-full items-center gap-2 rounded-[12px] px-3 py-2 text-left text-sm text-accent transition-colors hover:bg-accent/10 disabled:opacity-60"
+            >
+              <Plus size={15} className="flex-shrink-0" /> Criar “{query}”
+            </button>
+          );
+        }}
+      />
+
+      {selectedCats.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-ink-subtle">
+            {selectedCats.length} selecionada{selectedCats.length !== 1 ? "s" : ""}:
+          </span>
+          {selectedCats.map((cat) => (
+            <span
+              key={cat.id}
+              className="inline-flex items-center gap-1.5 rounded-pill border border-accent/60 bg-accent/15 px-3 py-1 text-sm text-accent"
+            >
+              {cat.name}
+              <button
+                type="button"
+                onClick={() => onToggle(cat.id)}
+                aria-label={`Remover ${cat.name}`}
+                className="text-accent/70 transition-colors hover:text-accent"
+              >
+                <X size={13} />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-ink-subtle">Nenhuma categoria selecionada.</p>
+      )}
+    </div>
+  );
+}
+
 function ProductForm({ productId, initial }: { productId: number | null; initial: ProductDetail | null }) {
   const isEdit = productId !== null;
   const navigate = useNavigate();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
-  const categories = useCategories().data?.data ?? [];
+  const { confirm, dialog } = useConfirm();
+  const categories = useAllCategories().data ?? [];
 
   const [initialRows] = useState(() => buildRows(initial));
   const [sku, setSku] = useState(initial?.sku ?? "");
@@ -127,7 +214,7 @@ function ProductForm({ productId, initial }: { productId: number | null; initial
 
   const removeVariant = async (row: VariantRow) => {
     if (row.id) {
-      if (!confirm("Remover esta variante?")) return;
+      if (!(await confirm({ title: "Remover variante", description: "Esta variante será removida do produto.", confirmLabel: "Remover", danger: true }))) return;
       try {
         await adminDeleteVariant(row.id);
       } catch (e) {
@@ -148,7 +235,7 @@ function ProductForm({ productId, initial }: { productId: number | null; initial
 
   const removeImage = async (row: ImageRow) => {
     if (row.id) {
-      if (!confirm("Remover esta imagem?")) return;
+      if (!(await confirm({ title: "Remover imagem", description: "Esta imagem será removida do produto.", confirmLabel: "Remover", danger: true }))) return;
       try {
         await adminDeleteImage(row.id);
       } catch (e) {
@@ -283,30 +370,7 @@ function ProductForm({ productId, initial }: { productId: number | null; initial
         {/* categories */}
         <section className="space-y-3 rounded-card border border-line bg-surface-2 p-6">
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-ink-muted">Categorias</h2>
-          {categories.length === 0 ? (
-            <p className="text-sm text-ink-subtle">Nenhuma categoria cadastrada.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {categories.map((cat) => {
-                const selected = selectedCats.includes(cat.id);
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => toggleCategory(cat.id)}
-                    className={cn(
-                      "rounded-pill border px-4 py-2 text-sm transition-colors duration-200",
-                      selected
-                        ? "border-accent/60 bg-accent/15 text-accent"
-                        : "border-line bg-elevated text-ink-muted hover:border-line-strong",
-                    )}
-                  >
-                    {cat.name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <CategoryPicker categories={categories} selected={selectedCats} onToggle={toggleCategory} />
         </section>
 
         {/* variants */}
@@ -407,6 +471,7 @@ function ProductForm({ productId, initial }: { productId: number | null; initial
           </Button>
         </div>
       </form>
+      {dialog}
     </div>
   );
 }

@@ -1,21 +1,15 @@
-import { useRef } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Search } from "lucide-react";
-import { useInfiniteProducts, useCategories } from "../hooks/queries";
+import { Plus, Search } from "lucide-react";
+import { useInfiniteProducts, useAllStoreCategories } from "../hooks/queries";
+import { useDebounce } from "../hooks/useDebounce";
+import { SORT_OPTIONS, toSortValue } from "../lib/productFilters";
 import { CardProduto } from "../components/CardProduto";
 import { SkeletonCard } from "../components/SkeletonCard";
-import { Button, EmptyState, cn } from "../components/ui";
+import { Button, Combobox, EmptyState, chipClass, toggleClass } from "../components/ui";
 
 const PAGE_SIZE = 12;
-
-const SORT_OPTIONS = [
-  { value: "newest", label: "Novidades" },
-  { value: "price_asc", label: "Menor preço" },
-  { value: "price_desc", label: "Maior preço" },
-  { value: "name", label: "Nome (A–Z)" },
-] as const;
-
-type SortValue = (typeof SORT_OPTIONS)[number]["value"];
+const VISIBLE_CATEGORIES = 8;
 
 export function Produtos() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -23,16 +17,33 @@ export function Produtos() {
   const q = searchParams.get("q") ?? "";
   const categoria = searchParams.get("categoria");
   const categoryId = categoria ? Number(categoria) : undefined;
-  const sortParam = searchParams.get("ordenar") as SortValue | null;
-  const sort: SortValue = SORT_OPTIONS.some((o) => o.value === sortParam) ? sortParam! : "newest";
+  const sort = toSortValue(searchParams.get("ordenar"));
   const onSale = searchParams.get("promo") === "1";
   const inStock = searchParams.get("estoque") === "1";
 
   const hasActiveFilters = Boolean(q) || categoryId !== undefined || onSale || inStock;
 
-  const searchRef = useRef<HTMLInputElement>(null);
+  // debounced search: type freely, the URL `q` (source of truth) follows.
+  const [searchInput, setSearchInput] = useState(q);
+  const debouncedSearch = useDebounce(searchInput, 350);
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        const term = debouncedSearch.trim();
+        if (term) next.set("q", term);
+        else next.delete("q");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [debouncedSearch, setSearchParams]);
 
-  const categories = useCategories().data?.data ?? [];
+  const categories = useAllStoreCategories().data ?? [];
+  const visibleCategories = categories.slice(0, VISIBLE_CATEGORIES);
+  const activeCategory = categoryId ? categories.find((c) => c.id === categoryId) : undefined;
+  // surface the active category as a chip when it's beyond the visible slice.
+  const activeOutside = activeCategory && !visibleCategories.some((c) => c.id === activeCategory.id);
 
   // filter changes swap the query key, so the list resets to page 1 on its own.
   const productsQuery = useInfiniteProducts({
@@ -52,32 +63,13 @@ export function Produtos() {
     setSearchParams(next);
   }
 
-  function submitSearch() {
-    updateParam("q", searchRef.current?.value.trim() || null);
-  }
-
   function clearFilters() {
+    setSearchInput("");
     setSearchParams(new URLSearchParams());
   }
 
   const total = productsQuery.data?.pages[0]?.meta.total ?? 0;
   const hasMore = productsQuery.hasNextPage;
-
-  const chipClass = (active: boolean) =>
-    cn(
-      "flex-shrink-0 rounded-pill border px-4 py-2 text-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
-      active
-        ? "border-white bg-white font-medium text-black"
-        : "border-line bg-surface-2 text-ink-muted hover:border-line-strong",
-    );
-
-  const toggleClass = (active: boolean) =>
-    cn(
-      "rounded-pill border px-3 py-1.5 text-xs font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
-      active
-        ? "border-accent/60 bg-accent/15 text-accent"
-        : "border-line bg-surface-2 text-ink-muted hover:border-line-strong",
-    );
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -105,25 +97,25 @@ export function Produtos() {
         <div className="flex items-center gap-2 rounded-pill border border-line bg-elevated px-3 py-2 text-ink-muted transition-colors focus-within:border-accent/60">
           <Search size={16} className="flex-shrink-0" />
           <input
-            ref={searchRef}
-            key={q}
-            defaultValue={q}
-            onKeyDown={(e) => e.key === "Enter" && submitSearch()}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             aria-label="Buscar produtos"
             placeholder="Buscar produtos..."
             className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-subtle"
           />
-          <Button size="sm" onClick={submitSearch}>
-            Buscar
-          </Button>
         </div>
 
-        {/* categories */}
-        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* categories: priority chips + searchable overflow */}
+        <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => updateParam("categoria", null)} className={chipClass(categoryId === undefined)}>
             Todos
           </button>
-          {categories.map((cat) => (
+          {activeOutside && activeCategory && (
+            <button onClick={() => updateParam("categoria", null)} className={chipClass(true)}>
+              {activeCategory.name}
+            </button>
+          )}
+          {visibleCategories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => updateParam("categoria", String(cat.id))}
@@ -132,6 +124,23 @@ export function Produtos() {
               {cat.name}
             </button>
           ))}
+          {categories.length > VISIBLE_CATEGORIES && (
+            <Combobox
+              className="flex-shrink-0"
+              triggerClassName="!w-auto !py-2 border-line bg-surface-2 text-ink-muted hover:border-line-strong"
+              items={categories.map((c) => ({ value: c.id, label: c.name }))}
+              isSelected={(v) => categoryId === v}
+              onSelect={(v) => updateParam("categoria", String(v))}
+              closeOnSelect
+              searchPlaceholder="Buscar categoria..."
+              emptyLabel={(term) => (term ? `Nenhuma categoria para "${term}"` : "Nenhuma categoria.")}
+              triggerContent={
+                <span className="inline-flex items-center gap-1.5">
+                  <Plus size={14} /> Mais categorias
+                </span>
+              }
+            />
+          )}
         </div>
 
         {/* sorting + toggles */}

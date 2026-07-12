@@ -1,11 +1,16 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ChevronDown, Pencil, Plus, Search } from "lucide-react";
-import { useAdminProduct, useAdminProducts } from "../../hooks/queries";
+import { useAdminProduct, useAdminProducts, useAllCategories } from "../../hooks/queries";
 import { useUpdateProduct, useUpdateVariant } from "../../hooks/mutations";
 import type { ApiVariant, ProductSummary } from "../../types";
 import { useToast } from "../../context/useToast";
-import { Badge, Button, EmptyState, Input, SafeImage, Spinner, cn } from "../../components/ui";
+import { useDebounce } from "../../hooks/useDebounce";
+import { SORT_OPTIONS } from "../../lib/productFilters";
+import type { SortValue } from "../../lib/productFilters";
+import { Badge, Button, Combobox, EmptyState, Input, SafeImage, Spinner, chipClass, cn, toggleClass } from "../../components/ui";
+
+type ActiveFilter = "all" | "active" | "inactive";
 
 const PAGE_SIZE = 15;
 
@@ -82,23 +87,69 @@ function VariantesEditor({ productId }: { productId: number }) {
 export function GerenciarEstoque() {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const searchRef = useRef<HTMLInputElement>(null);
 
-  const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
+  const q = useDebounce(search.trim(), 350);
+  const [categoryId, setCategoryId] = useState<number | undefined>();
+  const [sort, setSort] = useState<SortValue>("newest");
+  const [onSale, setOnSale] = useState(false);
+  const [inStock, setInStock] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
+  // every filter mutation also jumps back to the first page.
+  const onSearch = (v: string) => {
+    setSearch(v);
+    setPage(1);
+  };
+  const pickCategory = (v: number) => {
+    setCategoryId(v === 0 ? undefined : v);
+    setPage(1);
+  };
+  const pickSort = (v: SortValue) => {
+    setSort(v);
+    setPage(1);
+  };
+  const toggle = (setter: (fn: (prev: boolean) => boolean) => void) => {
+    setter((prev) => !prev);
+    setPage(1);
+  };
+  const pickActive = (v: ActiveFilter) => {
+    setActiveFilter(v);
+    setPage(1);
+  };
+
+  const categories = useAllCategories().data ?? [];
+  const categoryItems = [
+    { value: 0, label: "Todas as categorias" },
+    ...categories.map((c) => ({ value: c.id, label: c.name })),
+  ];
+  const activeParam = activeFilter === "all" ? undefined : activeFilter === "active";
+
+  const hasActiveFilters =
+    Boolean(q) || categoryId !== undefined || onSale || inStock || activeFilter !== "all" || sort !== "newest";
+
   const { data, isLoading, error } = useAdminProducts({
-    q: query || undefined,
+    q: q || undefined,
+    category_id: categoryId,
+    on_sale: onSale || undefined,
+    in_stock: inStock || undefined,
+    active: activeParam,
+    sort,
     page,
     limit: PAGE_SIZE,
-    sort: "newest",
   });
   const items = data?.data ?? [];
   const updateProduct = useUpdateProduct();
 
-  const submitSearch = () => {
-    setQuery(searchRef.current?.value.trim() ?? "");
+  const clearFilters = () => {
+    setSearch("");
+    setCategoryId(undefined);
+    setSort("newest");
+    setOnSale(false);
+    setInStock(false);
+    setActiveFilter("all");
     setPage(1);
   };
 
@@ -132,20 +183,85 @@ export function GerenciarEstoque() {
         </div>
       </div>
 
-      {/* search */}
-      <div className="mb-4 flex items-center gap-2 rounded-pill border border-line bg-surface-2 px-3 py-2 text-ink-muted focus-within:border-accent/60">
-        <Search size={16} className="flex-shrink-0" />
-        <input
-          ref={searchRef}
-          defaultValue={query}
-          onKeyDown={(e) => e.key === "Enter" && submitSearch()}
-          placeholder="Buscar por nome..."
-          aria-label="Buscar produtos"
-          className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-subtle"
-        />
-        <Button size="sm" onClick={submitSearch}>
-          Buscar
-        </Button>
+      {/* filter bar */}
+      <div className="mb-4 flex flex-col gap-4 rounded-card border border-line bg-surface-2 p-4">
+        {/* search */}
+        <div className="flex items-center gap-2 rounded-pill border border-line bg-elevated px-3 py-2 text-ink-muted transition-colors focus-within:border-accent/60">
+          <Search size={16} className="flex-shrink-0" />
+          <input
+            value={search}
+            onChange={(e) => onSearch(e.target.value)}
+            placeholder="Buscar por nome..."
+            aria-label="Buscar produtos"
+            className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-subtle"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          {/* category */}
+          <Combobox
+            className="w-full sm:w-64"
+            items={categoryItems}
+            isSelected={(v) => (v === 0 ? categoryId === undefined : categoryId === v)}
+            onSelect={pickCategory}
+            closeOnSelect
+            searchPlaceholder="Buscar categoria..."
+            emptyLabel={(term) => (term ? `Nenhuma categoria para "${term}"` : "Nenhuma categoria.")}
+            triggerContent={
+              categoryId ? categories.find((c) => c.id === categoryId)?.name ?? "Categoria" : "Todas as categorias"
+            }
+          />
+
+          {/* sort */}
+          <label className="flex items-center gap-2 text-xs text-ink-subtle">
+            <span className="uppercase tracking-[0.15em]">Ordenar</span>
+            <select
+              value={sort}
+              onChange={(e) => pickSort(e.target.value as SortValue)}
+              aria-label="Ordenar produtos"
+              className="rounded-pill border border-line bg-elevated px-3 py-2 text-sm text-ink outline-none focus:border-accent/60"
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value} className="bg-surface text-ink">
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {/* toggles */}
+          <button aria-pressed={onSale} onClick={() => toggle(setOnSale)} className={toggleClass(onSale)}>
+            Promoção
+          </button>
+          <button aria-pressed={inStock} onClick={() => toggle(setInStock)} className={toggleClass(inStock)}>
+            Em estoque
+          </button>
+        </div>
+
+        {/* status + clear */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex gap-2">
+            {(
+              [
+                ["all", "Todos"],
+                ["active", "Ativos"],
+                ["inactive", "Inativos"],
+              ] as const
+            ).map(([value, label]) => (
+              <button key={value} onClick={() => pickActive(value)} className={chipClass(activeFilter === value)}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="text-sm text-ink-muted underline-offset-4 transition-colors hover:text-accent hover:underline"
+            >
+              Limpar filtros
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -161,8 +277,16 @@ export function GerenciarEstoque() {
       ) : items.length === 0 ? (
         <EmptyState
           title="Nenhum produto encontrado"
-          description="Cadastre um novo produto para começar."
-          action={<Button onClick={() => navigate("/admin/cadastro-produto")}>Cadastrar produto</Button>}
+          description={hasActiveFilters ? "Ajuste os filtros ou tente outro termo." : "Cadastre um novo produto para começar."}
+          action={
+            hasActiveFilters ? (
+              <Button variant="ghost" onClick={clearFilters}>
+                Limpar filtros
+              </Button>
+            ) : (
+              <Button onClick={() => navigate("/admin/cadastro-produto")}>Cadastrar produto</Button>
+            )
+          }
         />
       ) : (
         <div className="space-y-2">

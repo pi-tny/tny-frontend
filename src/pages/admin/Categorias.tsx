@@ -1,17 +1,19 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Pencil, Trash2, X } from "lucide-react";
+import { ArrowLeft, Pencil, Search, Trash2, X } from "lucide-react";
 import { useAdminCategories } from "../../hooks/queries";
 import { useCreateCategory, useDeleteCategory, useUpdateCategory } from "../../hooks/mutations";
 import type { Category } from "../../types";
 import { useToast } from "../../context/useToast";
+import { useDebounce } from "../../hooks/useDebounce";
 import { categorySchema, validateForm } from "../../lib/validation";
-import { Button, EmptyState, Field, Input, Spinner } from "../../components/ui";
+import { Button, EmptyState, Field, Input, Spinner, useConfirm } from "../../components/ui";
 
 export function Categorias() {
   const navigate = useNavigate();
   const { showToast } = useToast();
 
+  const { confirm, dialog } = useConfirm();
   const { data, isLoading, error } = useAdminCategories();
   const categories = data?.data ?? [];
   const createCategory = useCreateCategory();
@@ -22,6 +24,14 @@ export function Categorias() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+
+  const [search, setSearch] = useState("");
+  const q = useDebounce(search.trim().toLowerCase(), 250);
+  const filtered = q
+    ? categories.filter(
+        (c) => c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q),
+      )
+    : categories;
 
   const resetForm = () => {
     setEditingId(null);
@@ -49,8 +59,14 @@ export function Categorias() {
     else createCategory.mutate(body, { onSuccess, onError });
   };
 
-  const handleDelete = (cat: Category) => {
-    if (!confirm(`Excluir a categoria "${cat.name}"?`)) return;
+  const handleDelete = async (cat: Category) => {
+    const ok = await confirm({
+      title: "Excluir categoria",
+      description: `A categoria "${cat.name}" será excluída.`,
+      confirmLabel: "Excluir",
+      danger: true,
+    });
+    if (!ok) return;
     deleteCategory.mutate(cat.id, {
       onSuccess: () => {
         showToast("Categoria excluída.");
@@ -94,6 +110,20 @@ export function Categorias() {
         </div>
       </form>
 
+      {/* search */}
+      {categories.length > 0 && (
+        <div className="mb-4 flex items-center gap-2 rounded-pill border border-line bg-surface-2 px-3 py-2 text-ink-muted focus-within:border-accent/60">
+          <Search size={16} className="flex-shrink-0" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar categoria..."
+            aria-label="Buscar categoria"
+            className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-subtle"
+          />
+        </div>
+      )}
+
       {/* list */}
       {error && (
         <div className="mb-4 rounded-[16px] border border-danger/20 bg-danger/5 p-4 text-center text-sm text-danger">{error.message}</div>
@@ -104,9 +134,11 @@ export function Categorias() {
         </div>
       ) : categories.length === 0 ? (
         <EmptyState title="Nenhuma categoria" description="Crie a primeira categoria acima." />
+      ) : filtered.length === 0 ? (
+        <EmptyState title="Nada encontrado" description={`Nenhuma categoria encontrada para "${search.trim()}".`} />
       ) : (
         <div className="space-y-2">
-          {categories.map((cat) => (
+          {filtered.map((cat) => (
             <div key={cat.id} className="flex items-center gap-3 rounded-card border border-line bg-surface-2 p-4">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">{cat.name}</p>
@@ -122,6 +154,7 @@ export function Categorias() {
           ))}
         </div>
       )}
+      {dialog}
     </div>
   );
 }
