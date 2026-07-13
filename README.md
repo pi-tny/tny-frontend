@@ -70,6 +70,8 @@ src/
 |---|---|---|
 | `VITE_API_URL` | `http://localhost:3000` | URL base do backend, sem barra final |
 
+> `VITE_API_URL` é lida em **tempo de build**: o Vite embute o valor no bundle. Em dev basta o `.env`; para Docker/produção ela precisa ser passada no `docker build` (veja [Deploy](#deploy)).
+
 ## Scripts
 
 | Script | Descrição |
@@ -83,12 +85,15 @@ src/
 
 **Vercel** — `vercel.json` já configura as rewrites para SPA. Defina `VITE_API_URL` como variável de ambiente no painel do projeto.
 
-**Docker** — imagem multi-stage com Node 24 (build) e Nginx (serve estático):
+**Docker** — imagem multi-stage com Node 20 (build) e Nginx (serve estático, com fallback SPA via `nginx.conf`):
 
 ```bash
-docker build -t tny-frontend .
-docker run -p 80:80 tny-frontend
+# build apontando para o backend desejado
+docker build --build-arg VITE_API_URL=https://api.exemplo.com -t tny-frontend .
+docker run -p 80:80 tny-frontend      # http://localhost
 ```
+
+Sem `--build-arg`, a imagem usa o padrão `http://localhost:3000` — que não funciona a partir de dentro do container em produção. Como o Vite embute a URL no build, trocar o backend exige rebuild da imagem.
 
 ## Licença
 
